@@ -37,45 +37,50 @@ torch.set_num_threads(1)
 
 # TODO: Write proper docstrings for all methods
 class LearningRateLoggerCallback(BaseCallback):
-    def _on_step(self) -> bool:
-        return True
-
     def __init__(self, log_dir: str):
         super().__init__()
-        # self.gradients_path = os.path.join(log_dir, 'gradients.csv')
+        self.gradients_path = os.path.join(log_dir, 'gradients.json')
         self.updates_path = os.path.join(log_dir, 'adam_updates.json')
         self.lr_path = os.path.join(log_dir, 'learning_rates.csv')
+        
+        self.gradients_buffer = []
+        self.adam_update_buffer = []
+        self.lr_buffer = []
+
+        self.items_to_save_at_once = 100
+    
+    # Called right before training starts. Allows access to fully initialized model and environment.
+    def _init_callback(self):
+        # Initialize gradients (steps added to current solution) JSON file if it does not exist
+        if not os.path.exists(self.gradients_path):
+            with open(self.gradients_path, 'w') as f:
+                json.dump([], f)  # Start with an empty list
 
         # Initialize Adam updates (steps added to current solution) JSON file if it does not exist
-        if not os.path.exists(self.updates_path):
-            with open(self.updates_path, 'w') as f:
-                json.dump([], f)  # Start with an empty list
+        if self.model.policy.optimizer.__class__ == torch.optim.Adam:
+            if not os.path.exists(self.updates_path):
+                with open(self.updates_path, 'w') as f:
+                    json.dump([], f)  # Start with an empty list
 
         # Initialize learning rate csv with header
         with open(self.lr_path, 'w') as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(['timestep', 'learning_rate'])
 
-    def _on_rollout_end(self):
-        if self.model is None:
-            return
 
-        # Save current gradient vector
-        # gradients = []
-        # for param in self.model.policy.parameters():
-        #     if param.grad is not None:
-        #         gradients.append(param.grad.view(-1))  # Flatten each gradient
+    def get_gradients(self):
+        stacked_gradients = []
+        gradients = []
+        for param in self.model.policy.parameters():
+            if param.grad is not None:
+                gradients.append(param.grad.view(-1))  # Flatten each gradient
+        if gradients:
+            stacked_gradients = torch.cat(gradients).cpu().numpy()
+        return stacked_gradients
 
-        # if gradients:
-        #     stacked_gradients = torch.cat(gradients).cpu().numpy()  # Concatenate all gradients
-        #     csv_entry = [self.model.num_timesteps, stacked_gradients]
 
-        #     # Append gradients to CSV file
-        #     with open(self.gradients_path, 'a', newline='') as f:
-        #         writer = csv.writer(f)
-        #         writer.writerow(csv_entry)  # Write one row per policy update
-
-        # Save current Adam step
+    def get_adam_update(self):
+        stacked_updates = []
         if self.model.policy.optimizer.__class__ == torch.optim.Adam:
             optimizer = self.model.policy.optimizer
 
@@ -92,58 +97,158 @@ class LearningRateLoggerCallback(BaseCallback):
                         # Compute the Adam update step
                         update_step = -m_t / (torch.sqrt(v_t) + eps)  # TODO: Remove step_size
                         updates.append(update_step.view(-1))  # Flatten each update
-
+                        
             if updates:
-                # Save current Adam updates
                 stacked_updates = torch.cat(updates).cpu().numpy()
-                json_entry = {
-                    'timestep': self.model.num_timesteps,
-                    'adam_update': stacked_updates.tolist()
-                }
-                # Read existing data
-                with open(self.updates_path, 'r') as f:
-                    data = json.load(f)
-                # Append new array data
-                data.append(json_entry)
-                # Write back to JSON file
-                with open(self.updates_path, 'w') as f:
-                    json.dump(data, f)
 
-        # Save current learning rate
+        return stacked_updates
+
+    def get_lr_update(self):
         if 'd' in self.model.policy.optimizer.param_groups[0]:
-            csv_entry = [self.model.num_timesteps, self.model.policy.optimizer.param_groups[0]['lr'] *
-                         self.model.policy.optimizer.param_groups[0]['d']]
+            lr = self.model.policy.optimizer.param_groups[0]['lr'] * self.model.policy.optimizer.param_groups[0]['d']
         else:
-            csv_entry = [self.model.num_timesteps, self.model.policy.optimizer.param_groups[0]['lr']]
+            lr = self.model.policy.optimizer.param_groups[0]['lr']
+        return lr
+    
+    def add_gradients_to_buffer(self, timestep, gradients):
+        if len(gradients) > 0:
+            json_entry = {
+                        'timestep': timestep,
+                        'gradients': gradients.tolist()
+                    }
+            self.gradients_buffer.append(json_entry)
 
+    def add_adam_update_to_buffer(self, timestep, adam_update):
+        if len(adam_update) > 0:
+            json_entry = {
+                        'timestep': timestep,
+                        'adam_update': adam_update.tolist()
+                    }
+            self.adam_update_buffer.append(json_entry)
+
+    def add_lr_update_to_buffer(self, timestep, lr_update):
+        self.lr_buffer.append([timestep, lr_update])
+
+    def write_gradients_buffer_to_disk(self):
+        if self.gradients_buffer:
+            # Read existing data
+            with open(self.gradients_path, 'r') as f:
+                data = json.load(f)
+            # Append new array data
+            data.extend(self.gradients_buffer)
+            # Write back to JSON file
+            with open(self.gradients_path, 'w') as f:
+                json.dump(data, f)
+
+    def write_adam_update_buffer_to_disk(self):
+        if self.adam_update_buffer:
+            # Read existing data
+            with open(self.updates_path, 'r') as f:
+                data = json.load(f)
+            # Append new array data
+            data.extend(self.adam_update_buffer)
+            # Write back to JSON file
+            with open(self.updates_path, 'w') as f:
+                json.dump(data, f)
+
+    def write_lr_update_buffer_to_disk(self):
         with open(self.lr_path, 'a') as csv_file:
             writer = csv.writer(csv_file)
-            writer.writerow(csv_entry)
+            writer.writerows(self.lr_buffer)
+            
+    def reset_gradients_buffer(self):
+        self.gradients_buffer = []
 
+    def reset_adam_update_buffer(self):
+        self.adam_update_buffer = []
 
-class AdaptiveLearningRateCallback(BaseCallback):
+    def reset_lr_update_buffer(self):
+        self.lr_buffer = []
+
     def _on_step(self) -> bool:
         return True
 
-    def __init__(self, log_dir: str, lr0: float):
+    def _on_rollout_end(self):
+        if self.model is None:
+            return
+
+        current_timestep = self.model.num_timesteps
+
+
+        # Get latest gradients and append to buffer
+        gradients = self.get_gradients()
+        self.add_gradients_to_buffer(current_timestep, gradients)
+
+        # Get latest adam updates and append to buffer
+        adam_updates = self.get_adam_update()
+        self.add_adam_update_to_buffer(current_timestep, adam_updates)
+
+        # Get latest learning rate and append to buffer
+        lr_update = self.get_lr_update()
+        self.add_lr_update_to_buffer(current_timestep, lr_update)
+
+        # If a buffer is full enough, write entire buffer to disk
+        if len(self.gradients_buffer) >= self.items_to_save_at_once:
+            self.write_gradients_buffer_to_disk()
+            self.reset_gradients_buffer()
+
+        if len(self.adam_update_buffer) >= self.items_to_save_at_once:
+            self.write_adam_update_buffer_to_disk()
+            self.reset_adam_update_buffer()
+
+        if len(self.lr_buffer) >= self.items_to_save_at_once:
+            self.write_lr_update_buffer_to_disk()
+            self.reset_lr_update_buffer()
+
+    
+    def _on_training_end(self):
+        # Write the remaining data in buffers to disk
+        self.write_gradients_buffer_to_disk()
+        self.reset_gradients_buffer()
+
+        self.write_adam_update_buffer_to_disk()
+        self.reset_adam_update_buffer()
+
+        self.write_lr_update_buffer_to_disk()
+        self.reset_lr_update_buffer()
+
+
+class AdaptiveLearningRateCallback(BaseCallback):
+
+    def __init__(self, lr0: float):
         super().__init__()
         self.lr = lr0
         self.path = 0
         self.c = 0.1  # Constant for cumul. path of Adam steps' variance
         self.d = 1  # Damping factor used in learning rate update
         self.policy_update_count = 0
-        self.updates_path = os.path.join(log_dir, 'adam_updates.json')
-        self.lr_path = os.path.join(log_dir, 'learning_rates.csv')
+    
+    def get_adam_update(self):
+        stacked_updates = []
+        if self.model.policy.optimizer.__class__ == torch.optim.Adam:
+            optimizer = self.model.policy.optimizer
 
-        # Initialize Adam updates (steps added to current solution) JSON file if it does not exist
-        if not os.path.exists(self.updates_path):
-            with open(self.updates_path, 'w') as f:
-                json.dump([], f)  # Start with an empty list
+            updates = []
+            for param in self.model.policy.parameters():
+                if param in optimizer.state:
+                    state = optimizer.state[param]
+                    if 'exp_avg' in state and 'exp_avg_sq' in state:
+                        m_t = state['exp_avg']
+                        v_t = state['exp_avg_sq']
+                        # step_size = optimizer.param_groups[0]['lr']  # TODO: Remove step_size
+                        eps = optimizer.param_groups[0]['eps']
 
-        # Initialize learning rate csv with header
-        with open(self.lr_path, 'w') as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(['timestep', 'learning_rate'])
+                        # Compute the Adam update step
+                        update_step = -m_t / (torch.sqrt(v_t) + eps)  # TODO: Remove step_size
+                        updates.append(update_step.view(-1))  # Flatten each update
+                        
+            if updates:
+                stacked_updates = torch.cat(updates).cpu().numpy()
+
+        return stacked_updates
+
+    def _on_step(self) -> bool:
+        return True
 
     def _on_rollout_end(self):
         if self.model is None:
@@ -151,37 +256,8 @@ class AdaptiveLearningRateCallback(BaseCallback):
 
         self.policy_update_count += 1  # Count policy updates
 
-        # Compute Adam step
-        optimizer = self.model.policy.optimizer
-        updates = []
-        for param in self.model.policy.parameters():
-            if param in optimizer.state:
-                state = optimizer.state[param]
-                if 'exp_avg' in state and 'exp_avg_sq' in state:
-                    m_t = state['exp_avg']
-                    v_t = state['exp_avg_sq']
-                    eps = optimizer.param_groups[0]['eps']
-
-                    # Compute Adam update step
-                    update_step = -m_t / (torch.sqrt(v_t) + eps)
-                    updates.append(update_step.view(-1))  # Flatten each update
-        if updates:
-            # Update path
-            stacked_updates = torch.cat(updates).cpu().numpy()
-
-            # Save current Adam updates
-            json_entry = {
-                'timestep': self.model.num_timesteps,
-                'adam_update': stacked_updates.tolist()
-            }
-            # Read existing data
-            with open(self.updates_path, 'r') as f:
-                data = json.load(f)
-            # Append new array data
-            data.append(json_entry)
-            # Write back to JSON file
-            with open(self.updates_path, 'w') as f:
-                json.dump(data, f)
+        stacked_updates = self.get_adam_update()
+        if len(stacked_updates) > 0:
 
             # Update path variable
             self.path = (1 - self.c) * self.path + self.c * np.var(stacked_updates)
@@ -197,13 +273,6 @@ class AdaptiveLearningRateCallback(BaseCallback):
 
                 self.model.learning_rate = self.lr
                 self.model._setup_lr_schedule()  # Needed for lr change to be effective
-
-        # Save current learning rate
-        csv_entry = [self.model.num_timesteps, self.model.policy.optimizer.param_groups[0]['lr']]
-
-        with open(self.lr_path, 'a') as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(csv_entry)
 
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
@@ -245,7 +314,6 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     self.model.save(self.save_path)
 
         return True
-
 
 def linear_schedule(initial_value: float) -> Callable[[float], float]:
     """
@@ -393,12 +461,13 @@ def train_on_containergym(model_path,
         model = PPO(MultiInputActorCriticPolicy, env, seed=seed, learning_rate=learning_rate,
                     policy_kwargs=policy_kwargs)
 
+    callback_list = [SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0), 
+                     LearningRateLoggerCallback(log_dir=model_path)]
+    
     if adaptive_lr:
-        callbacks = CallbackList([SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0),
-                                  AdaptiveLearningRateCallback(log_dir=model_path, lr0=learning_rate)])
-    else:
-        callbacks = CallbackList([SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0),
-                                  LearningRateLoggerCallback(log_dir=model_path)])
+        callback_list.append(AdaptiveLearningRateCallback(lr0=learning_rate))
+
+    callbacks = CallbackList(callback_list)
 
     model.learn(total_timesteps=timesteps, callback=callbacks)
 
@@ -617,12 +686,13 @@ def train_on_gymnasium(model_path, env_name, timesteps, seed=None, learning_rate
 
     model = PPO('MlpPolicy', env, seed=seed, learning_rate=learning_rate, verbose=0, policy_kwargs=policy_kwargs)
 
+    callback_list = [SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0), 
+                     LearningRateLoggerCallback(log_dir=model_path)]
+    
     if adaptive_lr:
-        callbacks = CallbackList([SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0),
-                                  AdaptiveLearningRateCallback(log_dir=model_path, lr0=learning_rate)])
-    else:
-        callbacks = CallbackList([SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0),
-                                  LearningRateLoggerCallback(log_dir=model_path)])
+        callback_list.append(AdaptiveLearningRateCallback(lr0=learning_rate))
+
+    callbacks = CallbackList(callback_list)
 
     model.learn(total_timesteps=timesteps, callback=callbacks)
 

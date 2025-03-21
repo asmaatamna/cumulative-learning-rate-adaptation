@@ -24,7 +24,7 @@ def main(environment, optimizer, lr0):
     learning_rate = lr0  # 3e-3, 3e-5
     lr_coef_dadaptation = [1, 0.5, 1e-1, 1e-2]
     lr_coef_prodigy = [1, 0.5, 1e-1, 1e-2]
-    dir_experiment = '/local/aatamna/ppo_'
+    dir_experiment = 'ppo_'
 
     # Set optimizer to be used by PPO
     if optimizer == 0:  # Default Adam without lr adaptation
@@ -64,8 +64,17 @@ def main(environment, optimizer, lr0):
 
         dir_experiment += 'containergym'
 
-        if optimizer == 0 or optimizer == 1:
+        if optimizer == 0:
             run_all_experiments_on_containergym(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
+                                                dir_configs=dir_configs,
+                                                config_names=config_names,
+                                                n_models=n_models,
+                                                learning_rate=learning_rate,
+                                                default_actor_critic_arch=False,
+                                                policy_kwargs=policy_kwargs)
+        
+        if optimizer == 1:
+            run_all_experiments_on_containergym(dir_experiment=dir_experiment + "_lr0_" + str(lr0),
                                                 dir_configs=dir_configs,
                                                 config_names=config_names,
                                                 n_models=n_models,
@@ -112,8 +121,14 @@ def main(environment, optimizer, lr0):
 
         dir_experiment += 'gymnasium'
 
-        if optimizer == 0 or optimizer == 1:
+        if optimizer == 0:
             run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
+                                             env_names=env_names,
+                                             n_models=n_models,
+                                             learning_rate=learning_rate,
+                                             policy_kwargs=policy_kwargs)
+        if optimizer == 1:
+            run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(lr0),
                                              env_names=env_names,
                                              n_models=n_models,
                                              learning_rate=learning_rate,

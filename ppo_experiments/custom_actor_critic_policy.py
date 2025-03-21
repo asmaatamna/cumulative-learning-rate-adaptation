@@ -54,13 +54,13 @@ class CustomNetwork(nn.Module):
         previous_actor_layer_dim = self.n_obs
         for current_actor_layer_dim in actor_network_layers:
             actor_net.append(nn.Linear(previous_actor_layer_dim, current_actor_layer_dim))
-            actor_net.append(nn.ReLU())
+            actor_net.append(nn.ReLU()) #TODO: Don't add activation function to last layer
             previous_actor_layer_dim = current_actor_layer_dim
 
         previous_critic_layer_dim = self.n_obs
         for current_critic_layer_dim in critic_network_layers:
             critic_net.append(nn.Linear(previous_critic_layer_dim, current_critic_layer_dim))
-            critic_net.append(nn.ReLU())
+            critic_net.append(nn.ReLU()) #TODO: Don't add activation function to last layer
             previous_critic_layer_dim = current_critic_layer_dim
 
         # Actor network
