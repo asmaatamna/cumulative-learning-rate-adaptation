@@ -1,5 +1,5 @@
 from typing import List
-from stable_baselines3.common.policies import MultiInputActorCriticPolicy  # MultiInputActorCriticPolicy2
+from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 import torch
 from torch import nn
 import gymnasium.spaces as spaces

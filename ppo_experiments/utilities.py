@@ -78,7 +78,6 @@ class LearningRateLoggerCallback(BaseCallback):
             stacked_gradients = torch.cat(gradients).cpu().numpy()
         return stacked_gradients
 
-
     def get_adam_update(self):
         stacked_updates = []
         if self.model.policy.optimizer.__class__ == torch.optim.Adam:
@@ -174,7 +173,6 @@ class LearningRateLoggerCallback(BaseCallback):
 
         current_timestep = self.model.num_timesteps
 
-
         # Get latest gradients and append to buffer
         gradients = self.get_gradients()
         self.add_gradients_to_buffer(current_timestep, gradients)
@@ -200,7 +198,6 @@ class LearningRateLoggerCallback(BaseCallback):
             self.write_lr_update_buffer_to_disk()
             self.reset_lr_update_buffer()
 
-    
     def _on_training_end(self):
         # Write the remaining data in buffers to disk
         self.write_gradients_buffer_to_disk()
@@ -215,12 +212,12 @@ class LearningRateLoggerCallback(BaseCallback):
 
 class AdaptiveLearningRateCallback(BaseCallback):
 
-    def __init__(self, lr0: float):
+    def __init__(self, lr0: float, d: float):
         super().__init__()
         self.lr = lr0
         self.path = 0
         self.c = 0.1  # Constant for cumul. path of Adam steps' variance
-        self.d = 1  # Damping factor used in learning rate update
+        self.d = d  # Damping factor used in learning rate update
         self.policy_update_count = 0
     
     def get_adam_update(self):
@@ -257,21 +254,21 @@ class AdaptiveLearningRateCallback(BaseCallback):
         self.policy_update_count += 1  # Count policy updates
 
         stacked_updates = self.get_adam_update()
-        if len(stacked_updates) > 0:
+        D = len(stacked_updates)
 
+        if len(stacked_updates) > 0:  # TODO: Better way to check that gradient isn't empty?
             # Update path variable
-            self.path = (1 - self.c) * self.path + self.c * np.var(stacked_updates)
+            self.path = (1 - self.c) * self.path + np.sqrt(self.c * (2 - self.c)) * stacked_updates
 
             # Update learning rate starting from second "iteration"
             if self.policy_update_count > 1:
-                self.lr = self.lr * np.exp(self.c/(2 * self.d) * (np.linalg.norm(stacked_updates)**2 /
-                                                                  (len(stacked_updates) * self.path) - 1))
+                self.lr = self.lr * np.exp(self.d * ((np.linalg.norm(self.path)**2 / D) - 1))
 
                 # Update learning rate for all optimizer parameter groups
                 for param_group in self.model.policy.optimizer.param_groups:
                     param_group['lr'] = self.lr
 
-                self.model.learning_rate = self.lr
+                self.model.learning_rate = float(self.lr)  # TODO: Check values in logger files
                 self.model._setup_lr_schedule()  # Needed for lr change to be effective
 
 
@@ -314,6 +311,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                     self.model.save(self.save_path)
 
         return True
+
 
 def linear_schedule(initial_value: float) -> Callable[[float], float]:
     """
@@ -368,7 +366,22 @@ def plot_results(log_folder, title='Learning Curve', window_size=25):
     plt.show(block=True)
 
 
-def plot_multiple_results(log_folders, title='Learning curves', window_size=25):
+def read_monitor_file(log_folder, window_size=25):
+    """
+
+    :param log_folder: (str) experiment location to read monitor file from
+    :param window_size: (int) size of the sliding window used to smoothen the reward values
+    :return:
+    """
+    x, y = ts2xy(load_results(log_folder), 'timesteps')
+    y = moving_average(y, window=window_size)
+    # Truncate x
+    x = x[len(x) - len(y):]
+
+    return x, y
+
+
+def plot_multiple_results(log_folders, title='Learning curves', window_size=25, save_location=None):
     """
     plot the results
 
@@ -391,7 +404,10 @@ def plot_multiple_results(log_folders, title='Learning curves', window_size=25):
 
     ax.grid(True)
     ax.legend([f'{seed:02d}' for seed in range(len(log_folders))])
-    save_location = f'{dirname(dirname(log_folders[0]))}/{title}.png'
+    if not save_location:
+        save_location = f'{dirname(dirname(log_folders[0]))}/{title}.png'
+    else:
+        save_location = f'{save_location}/{title}.png'
     fig.savefig(save_location)
 
 
@@ -442,6 +458,7 @@ def train_on_containergym(model_path,
                           timesteps,
                           seed=None,
                           learning_rate=0.0003,
+                          damping=1,  # TODO: Change default damping value
                           policy_kwargs=None,
                           adaptive_lr=False):
     print(f'Training new model with config {config_name}')
@@ -465,7 +482,7 @@ def train_on_containergym(model_path,
                      LearningRateLoggerCallback(log_dir=model_path)]
     
     if adaptive_lr:
-        callback_list.append(AdaptiveLearningRateCallback(lr0=learning_rate))
+        callback_list.append(AdaptiveLearningRateCallback(lr0=learning_rate, d=damping))
 
     callbacks = CallbackList(callback_list)
 
@@ -610,6 +627,7 @@ def experiment_on_containergym(dir_experiment,
                                timesteps,
                                n_models=15,
                                learning_rate=0.0003,
+                               damping=1,
                                policy_kwargs=None,
                                adaptive_lr=False):
     experiment_path = f'{dir_experiment}/{config_name}'
@@ -617,7 +635,7 @@ def experiment_on_containergym(dir_experiment,
 
     processes = [Process(target=train_on_containergym,
                          args=(f'{experiment_path}/{seed:02d}', dir_configs, config_name, timesteps, seed,
-                               learning_rate, policy_kwargs, adaptive_lr))
+                               learning_rate, damping, policy_kwargs, adaptive_lr))
                  for seed in seeds]
 
     print(f'Starting experiment using config {config_name} and training for {int(timesteps)} timesteps!')
@@ -639,6 +657,7 @@ def run_all_experiments_on_containergym(dir_experiment,
                                         timesteps=None,
                                         n_models=15,
                                         learning_rate=0.0003,
+                                        damping=1,
                                         default_actor_critic_arch=False,
                                         adaptive_lr=False):
     # Policy parameters to use in PPO
@@ -648,9 +667,9 @@ def run_all_experiments_on_containergym(dir_experiment,
     for config_name in config_names:
         if timesteps is None:
             if '11' in config_name:  # 11 container setup
-                budget = 5e6
+                budget = 1e7  # 5e6
             elif '5' in config_name:  # 5 container setup
-                budget = 2e6
+                budget = 5e6  # 2e6
 
         if '11' in config_name:
             net_arch = [11]
@@ -667,11 +686,13 @@ def run_all_experiments_on_containergym(dir_experiment,
                                    budget,
                                    n_models,
                                    learning_rate,
+                                   damping,
                                    policy_kwargs,
                                    adaptive_lr)
 
 
-def train_on_gymnasium(model_path, env_name, timesteps, seed=None, learning_rate=0.0003, policy_kwargs=None, adaptive_lr=False):
+def train_on_gymnasium(model_path, env_name, timesteps, seed=None, learning_rate=0.0003, damping=1,  # TODO: Change default damping value
+                       policy_kwargs=None, adaptive_lr=False):
     print(f'Training new model with config {env_name}')
 
     os.makedirs(model_path, exist_ok=True)
@@ -690,7 +711,7 @@ def train_on_gymnasium(model_path, env_name, timesteps, seed=None, learning_rate
                      LearningRateLoggerCallback(log_dir=model_path)]
     
     if adaptive_lr:
-        callback_list.append(AdaptiveLearningRateCallback(lr0=learning_rate))
+        callback_list.append(AdaptiveLearningRateCallback(lr0=learning_rate, d=damping))
 
     callbacks = CallbackList(callback_list)
 
@@ -709,7 +730,7 @@ def rollout_on_gymnasium(model, env, seed=None, gamma=1., deterministic=True, li
 
     # Rollout
     while True:
-        action = model.predict(observation, deterministic=deterministic)[0]  # prediction yields action and state
+        action = model.predict(observation, deterministic=deterministic)[0]  # Prediction yields action and state
         observation, reward, terminated, truncated, info = env.step(action)
         cumulative_reward += gamma ** timestep * reward
         timestep += 1
@@ -751,7 +772,7 @@ def evaluate_experiment_on_gymnasium(experiment_path, env_name, n_models, policy
         model_path = f'{experiment_path}/{seed:02d}/best_model'
         model = get_model_by_path(model_path, env, policy_kwargs)
 
-        result = evaluate_policy_on_gymnasium(model, env, n_rollouts=15, verbose=True)  # TODO: Why is env highlighted?
+        result = evaluate_policy_on_gymnasium(model, env, n_rollouts=15, verbose=True)
 
         test_results.append((seed, result))
 
@@ -765,6 +786,7 @@ def experiment_on_gymnasium(dir_experiment,
                             timesteps=5e6,
                             n_models=15,
                             learning_rate=0.0003,
+                            damping=1,
                             policy_kwargs=None,
                             adaptive_lr=False):
     experiment_path = f'{dir_experiment}/{env_name}'
@@ -772,7 +794,7 @@ def experiment_on_gymnasium(dir_experiment,
 
     processes = [Process(target=train_on_gymnasium,
                          args=(f'{experiment_path}/{seed:02d}', env_name, timesteps, seed, learning_rate,
-                               policy_kwargs, adaptive_lr))
+                               damping, policy_kwargs, adaptive_lr))
                  for seed in seeds]
 
     print(f'Starting experiment on {env_name} and training for {int(timesteps)} timesteps!')
@@ -793,11 +815,13 @@ def run_all_experiments_on_gymnasium(dir_experiment,
                                      timesteps=None,
                                      n_models=15,
                                      learning_rate=0.0003,
+                                     damping=1,
                                      adaptive_lr=False):
-
     budget = timesteps
     for env_name in env_names:
         if not timesteps:
+            if env_name == 'Acrobot-v1' or env_name == 'Pendulum-v1':
+                budget = 1e6
             if env_name == 'LunarLander-v3' or env_name == 'BipedalWalker-v3':
                 budget = 5e6
             if env_name == 'Pong-v5':
@@ -807,4 +831,5 @@ def run_all_experiments_on_gymnasium(dir_experiment,
             if env_name == 'Humanoid-v5':
                 budget = 5e7
 
-        experiment_on_gymnasium(dir_experiment, env_name, budget, n_models, learning_rate, policy_kwargs, adaptive_lr)
+        experiment_on_gymnasium(dir_experiment, env_name, budget, n_models, learning_rate, damping, policy_kwargs,
+                                adaptive_lr)
