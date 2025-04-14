@@ -2,3 +2,5 @@
 /TM_Experiments/data
 *.pyc
 TM_Experiments/output.log
+TM_Experiments/results/**
+TM_Experiments/results/benchmark_mnist.pkl

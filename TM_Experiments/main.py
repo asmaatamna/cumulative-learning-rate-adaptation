@@ -3,11 +3,13 @@
 # Author: TM 2025
 # ---------------------------------------------------------*/
 
+import os
+
 # Dataset & Model Loader
 from src.datasets import load_dataset
 
 # Benchmarking Utilities
-from utils.benchmark import run_optimizer_benchmark, plot_results
+from utils.benchmark import run_optimizer_benchmark, plot_results, plot_results_for_dataset
 
 # ---------------------------------------------------------*/
 # Parameters
@@ -21,22 +23,44 @@ PLOT_RESULTS = 1        # Generate result plots
 
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
-DATASETS = ["mnist", "fmnist", "cifar10"]  # List of datasets to download
-DATASET_TO_BENCHMARK = "mnist"             # Choose dataset for benchmarking
+# DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
+DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
 
-BATCH_SIZE = 128      # Batch size for training 
-NUM_CLASSES = 10      # Number of classes in the dataset
+SUBSET = 5            # Percentage of dataset to use (use full)
+
+BATCH_SIZE = 128        # Batch size for training (adapted: 128 better for transformers too)
+
+# Dataset to Number of Classes
+NUM_CLASSES_DICT = {
+    "mnist": 10,
+    "fmnist": 10,
+    "cifar10": 10,
+    "cifar100": 100,
+    "breast_cancer": 2,
+    "wikitext": 50257  # For distilgpt2 tokenizer (vocab size)
+}
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 20     
-LEARNING_RATE = 0.00001
+EPOCHS = 2             # More realistic number of epochs
 SEED = 42
 
 # 4. Optimizers to Benchmark
 # ---------------------------------------------------------*/
 OPTIMIZERS = ["SGD", "SGDMomentum", "Adam", "AdamW", "RMSProp",
               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed"]
+
+# OPTIMIZERS = ["SGD", "Adam",
+#               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed"]
+
+# Default Learning Rates per Optimizer
+OPTIMIZER_LR = {
+    "SGD": 0.0000001,
+    "Adam": 0.0000001,
+    "Adam_Clara_Global": 0.0000001,
+    "Adam_Clara_Local": 0.0000001,
+    "Adam_Clara_Smoothed": 0.0000001,
+}
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
@@ -58,59 +82,64 @@ def download_datasets(datasets, batch_size):
             _ = load_dataset(dataset_name, batch_size=batch_size)
         except Exception as e:
             print(f"Error downloading {dataset_name}: {e}")
-    print("All datasets are ready.")
-
-
-def run_experiment(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, seed, save_dir):
-    """Run the optimizer benchmarking experiments."""
-    print("\n--------------------------------")
-    print(f"Starting Benchmarking 🚀")
-    print("--------------------------------")
-
-    run_optimizer_benchmark(
-        dataset_name=dataset_name,
-        optimizers=optimizers,
-        batch_size=batch_size,
-        num_classes=num_classes,
-        epochs=epochs,
-        learning_rate=learning_rate,
-        seed=seed,
-        save_dir=save_dir
-    )
-
-
-def plot_experiment_results(save_dir, plot_dir):
-    """Plot benchmarking results."""
-    plot_results(save_dir=save_dir, plot_dir=plot_dir)
-
+    print("All datasets are ready. ⛳️")
 
 # ---------------------------------------------------------*/
 # Main
 # ---------------------------------------------------------*/
 
+
 if __name__ == "__main__":
+
     if DOWNLOAD_DATASETS:
-        download_datasets(DATASETS, BATCH_SIZE)
+        download_datasets(DATASETS, batch_size=BATCH_SIZE)
 
     if RUN_BENCHMARK:
-        run_experiment(
-            dataset_name=DATASET_TO_BENCHMARK,
-            optimizers=OPTIMIZERS,
-            batch_size=BATCH_SIZE,
-            num_classes=NUM_CLASSES,
-            epochs=EPOCHS,
-            learning_rate=LEARNING_RATE,
-            seed=SEED,
-            save_dir=SAVE_DIR
-        )
+        print("\n--------------------------------")
+        print(f"Starting Benchmarking 🚀")
+        print("--------------------------------")
+
+        for dataset in DATASETS:
+            if dataset not in NUM_CLASSES_DICT:
+                raise ValueError(f"Dataset {dataset} not found in NUM_CLASSES_DICT!")
+
+            dataset_result_dir = os.path.join(SAVE_DIR, dataset)
+            os.makedirs(dataset_result_dir, exist_ok=True)
+
+            if dataset in ["wikitext", "bookcorpus"]:
+                batch_size = 8  # Much smaller for transformers
+            else:
+                batch_size = BATCH_SIZE
+    
+            for optimizer in OPTIMIZERS:
+                learning_rate = OPTIMIZER_LR.get(optimizer, 0.001)
+
+                run_optimizer_benchmark(
+                    dataset_name=dataset,
+                    optimizers=[optimizer],
+                    batch_size=BATCH_SIZE,
+                    num_classes=NUM_CLASSES_DICT[dataset],
+                    epochs=EPOCHS,
+                    learning_rate=learning_rate,
+                    seed=SEED,
+                    save_dir=dataset_result_dir,  # ⚡ Save in dataset-specific folder
+                    subset=SUBSET,
+                )
+
+            # ⚡ After all optimizers finished -> Plot all results for this dataset
+            plot_results_for_dataset(dataset_result_dir)
+
+        print("\n--------------------------------")
+        print("All tasks completed. 🌟")
+        print("--------------------------------")
 
     if PLOT_RESULTS:
-        plot_experiment_results(SAVE_DIR, PLOT_DIR)
+        plot_results(SAVE_DIR, PLOT_DIR)
 
     print("\n--------------------------------")
     print("All tasks completed. 🌟")
     print("--------------------------------")
 
-# ---------------------------------------------------------*/
+# -------------------------Notes-----------------------------------------------*\
 #
-# ---------------------------------------------------------*/
+# -----------------------------------------------------------------------------*\

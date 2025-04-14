@@ -9,13 +9,12 @@ import math
 
 # -------------------- Custom Adam_Clara Variants --------------------
 
+
 class AdamClaraGlobal(Optimizer):
-    """Implements Adam optimizer with CLARA (Global Averaging, Two Loops)."""
+    """Improved Adam optimizer with CLARA (Global Averaging, Two Loops, Clipped Scaling)."""
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), c=0.2, d=1.0, eps=1e-8, adapt_lr=True):
-        if lr <= 0.0:
-            raise ValueError(f"Invalid learning rate: {lr}")
-        defaults = dict(base_lr=lr, betas=betas, c=c, d=d, eps=eps, adapt_lr=adapt_lr)
+        defaults = dict(base_lr=lr, betas=betas, c=c, d=d, eps=eps, adapt_lr=adapt_lr, lr=lr)
         super(AdamClaraGlobal, self).__init__(params, defaults)
 
     def step(self, closure=None):
@@ -55,21 +54,19 @@ class AdamClaraGlobal(Optimizer):
 
                 step = m_hat / (v_hat.sqrt() + eps)
 
-                if adapt_lr:
-                    step_norm = torch.norm(step)
-                    if step_norm > 0:
-                        step = step / step_norm
-
                 sqrt_term = math.sqrt(c * (2 - c))
                 path.mul_(1 - c).add_(step, alpha=sqrt_term)
+
                 path_norm_squared_sum += path.norm() ** 2
                 path_numel_sum += path.numel()
 
                 state['path'] = path
 
+            # Calculate global scaling factor
             if adapt_lr and path_numel_sum > 0:
                 path_norm_squared_avg = path_norm_squared_sum / path_numel_sum
-                lr_factor = math.exp(c / (2 * d) * (path_norm_squared_avg.item() - 1))
+                lr_factor = math.exp((c / (2 * d)) * (path_norm_squared_avg.item() - 1))
+                lr_factor = min(max(lr_factor, 0.1), 10.0)  # ✅ Clipping neu eingebaut!
             else:
                 lr_factor = 1.0
 
@@ -86,22 +83,17 @@ class AdamClaraGlobal(Optimizer):
 
                 step = m_hat / (v_hat.sqrt() + eps)
 
-                if adapt_lr:
-                    step_norm = torch.norm(step)
-                    if step_norm > 0:
-                        step = step / step_norm
+                p.data.add_(step, alpha=-base_lr * lr_factor)
 
-                lr_scaled = base_lr * lr_factor
-                p.data.add_(step, alpha=-lr_scaled)
-
-            # FIX: Set group['lr'] for tracking
             group['lr'] = base_lr * lr_factor
 
         return loss
 
 
+# -------------------- AdamClaraLocal --------------------
+
 class AdamClaraLocal(Optimizer):
-    """Implements Adam optimizer with CLARA (Local Updates, Single Loop)."""
+    """Improved Adam optimizer with CLARA (Local Updates, Single Loop, Clipped Scaling)."""
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), c=0.2, d=1.0, eps=1e-8, adapt_lr=True):
         defaults = dict(lr=lr, betas=betas, c=c, d=d, eps=eps, adapt_lr=adapt_lr)
@@ -141,34 +133,31 @@ class AdamClaraLocal(Optimizer):
 
                 step = m_hat / (v_hat.sqrt() + eps)
 
-                if adapt_lr:
-                    step_norm = torch.norm(step)
-                    if step_norm > 0:
-                        step = step / step_norm
-
                 sqrt_term = math.sqrt(c * (2 - c))
                 path.mul_(1 - c).add_(step, alpha=sqrt_term)
 
                 norm_path_squared = path.norm() ** 2
                 dim = path.numel()
                 lr_factor = math.exp((c / (2 * d)) * (norm_path_squared.item() / dim - 1))
+                lr_factor = min(max(lr_factor, 0.1), 10.0)  # ✅ Clipping neu eingebaut!
 
                 if adapt_lr:
-                    lr *= lr_factor
+                    lr = lr * lr_factor
 
                 p.data.add_(step, alpha=-lr)
 
-            # FIX: Set group['lr'] for tracking
             group['lr'] = lr
 
         return loss
 
 
+# -------------------- AdamClaraSmoothed --------------------
+
 class AdamClaraSmoothed(Optimizer):
-    """Improved Adam optimizer with CLARA (Local Updates, Clipped and Smoothed LR)."""
+    """Improved Adam optimizer with CLARA (Smoothed and Clipped LR, Boosted Exponent)."""
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), c=0.2, d=1.0, eps=1e-8, adapt_lr=True):
-        defaults = dict(base_lr=lr, betas=betas, c=c, d=d, eps=eps, adapt_lr=adapt_lr, lr_smooth=lr)
+        defaults = dict(base_lr=lr, betas=betas, c=c, d=d, eps=eps, adapt_lr=adapt_lr, lr_smooth=lr, lr=lr)
         super(AdamClaraSmoothed, self).__init__(params, defaults)
 
     def step(self, closure=None):
@@ -206,20 +195,16 @@ class AdamClaraSmoothed(Optimizer):
 
                 step = m_hat / (v_hat.sqrt() + eps)
 
-                if adapt_lr:
-                    step_norm = torch.norm(step)
-                    if step_norm > 0:
-                        step = step / step_norm
-
                 sqrt_term = math.sqrt(c * (2 - c))
-                path.mul_(1 - c).add_(step, alpha=sqrt_term)
+                path.mul_(1 - c).add_(step, alpha=2.0 * sqrt_term)
 
                 norm_path_squared = path.norm() ** 2
                 dim = path.numel()
-                scaling_factor = math.exp((c / (2 * d)) * (norm_path_squared.item() / dim - 1))
+                exponent = (c / (2 * d)) * (norm_path_squared.item() / dim - 1)
+                scaling_factor = math.exp(5.0 * exponent)
 
-                # Clip scaling factor
-                scaling_factor = min(max(scaling_factor, 0.5), 2.0)
+                # Clip scaling factor (more aggressive)
+                scaling_factor = min(max(scaling_factor, 0.01), 10.0)
 
                 # Smooth learning rate
                 lr_smooth = 0.9 * lr_smooth + 0.1 * (base_lr * scaling_factor)
@@ -229,7 +214,6 @@ class AdamClaraSmoothed(Optimizer):
 
                 group['lr_smooth'] = lr_smooth
 
-            # FIX: Set group['lr'] for tracking
             group['lr'] = group['lr_smooth']
 
         return loss
