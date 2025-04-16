@@ -1,6 +1,6 @@
 # ---------------------------------------------------------*\
 # Title: Optimizer Loader
-# Author: TM 
+# Author: TM
 # ---------------------------------------------------------*/
 
 import torch
@@ -8,7 +8,6 @@ from torch.optim import Optimizer
 import math
 
 # -------------------- Custom Adam_Clara Variants --------------------
-
 
 class AdamClaraGlobal(Optimizer):
     """Improved Adam optimizer with CLARA (Global Averaging, Two Loops, Clipped Scaling)."""
@@ -219,6 +218,160 @@ class AdamClaraSmoothed(Optimizer):
         return loss
 
 
+class SGD_CLARA(Optimizer):
+    """Implements vanilla Gradient Descent with Cumulative Learning Rate Adaptation (CLARA)."""
+
+    def __init__(self, params, lr=1e-3, c=0.2, d=1.0, adapt_lr=True):
+        defaults = dict(lr=lr, c=c, d=d, adapt_lr=adapt_lr)
+        super(SGD_CLARA, self).__init__(params, defaults)
+
+    def __setstate__(self, state):
+        super(SGD_CLARA, self).__setstate__(state)
+
+    def step(self, closure=None):
+        """ Performs a single optimization step.
+        Arguments:
+            closure (callable, optional): A closure that reevaluates the model
+                and returns the loss.
+        """
+        loss = None
+        if closure is not None:
+            loss = closure()
+
+        for group in self.param_groups:
+            c = group['c']  # Smoothing factor for path
+            d = group['d']  # Damping factor used is CLARA
+            adapt_lr = group['adapt_lr']  # Whether to update learning rate
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad = p.grad.data
+                state = self.state[p]
+
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['path'] = torch.zeros_like(p.data)
+
+                state['step'] += 1
+                step = grad  # TODO: Check whether copying grad is necessary
+
+                if adapt_lr:
+                    step_norm = torch.linalg.norm(step)
+                    if step_norm > 0:
+                        step.div_(step_norm)
+
+                # Calculate "gradient descent" update
+                p.data.add_(step, alpha=-group['lr'])
+
+                # Update path
+                c2 = math.sqrt(c * (2 - c))  # TODO: Compute once only
+                state['path'].mul_(1 - c).add_(step, alpha=c2)
+
+                # Cumulative Learning Rate Adaptation (CLARA)
+                if adapt_lr:
+                    group['lr'] *= math.exp(c / (2 * d) * (torch.linalg.norm(state['path']) - 1))
+
+        return loss
+
+class Adam_CLARA(Optimizer):
+    """Implements Adam with Cumulative Learning Rate Adaptation (CLARA)."""
+
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
+                 c=0.2, d=1, adapt_lr=True, clamp_lr=(1e-6, 1e-3), norm_update=False, log_interval=100):
+        """
+        Args:
+            params (iterable): parameters to optimize
+            lr (float): initial learning rate
+            betas (Tuple[float, float]): coefficients used for computing running averages
+            eps (float): term added to denominator to improve numerical stability
+            c (float): CLARA smoothing factor
+            d (float): CLARA damping factor
+            adapt_lr (bool): whether to apply CLARA learning rate adaptation
+            clamp_lr (tuple): min and max learning rate
+            norm_update (bool): whether to normalize update vector before applying
+            log_interval (int): how often to log path norm and lr (in steps)
+        """
+        defaults = dict(lr=lr, betas=betas, eps=eps, c=c, d=d,
+                        adapt_lr=adapt_lr, clamp_lr=clamp_lr,
+                        norm_update=norm_update, log_interval=log_interval)
+        super(Adam_CLARA, self).__init__(params, defaults)
+
+    def __setstate__(self, state):
+        super(Adam_CLARA, self).__setstate__(state)
+
+    def step(self, closure=None):
+        """Performs a single optimization step."""
+        loss = closure() if closure is not None else None
+
+        for group in self.param_groups:
+            beta1, beta2 = group['betas']
+            eps = group['eps']
+            c = group['c']
+            d = group['d']
+            adapt_lr = group['adapt_lr']
+            clamp_min, clamp_max = group['clamp_lr']
+            norm_update = group['norm_update']
+            log_interval = group['log_interval']
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad = p.grad.data
+                state = self.state[p]
+
+                # Initialization
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['exp_avg'] = torch.zeros_like(p.data)
+                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    state['path'] = torch.zeros_like(p.data)
+                    group['base_lr'] = group['lr']
+
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                path = state['path']
+                state['step'] += 1
+                step_num = state['step']
+
+                # Adam update
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+
+                bias_correction1 = 1 - beta1 ** step_num
+                bias_correction2 = 1 - beta2 ** step_num
+                denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(eps)
+
+                step_size = group['lr'] / bias_correction1
+                adam_step = -step_size * exp_avg / denom
+
+                if norm_update:
+                    norm = torch.linalg.norm(adam_step)
+                    if norm > 0:
+                        adam_step = adam_step / norm
+
+                # Update parameter
+                p.data.add_(adam_step)
+
+                # CLARA path update
+                c2 = math.sqrt(c * (2 - c))
+                path.mul_(1 - c).add_(adam_step, alpha=c2)
+
+                # CLARA learning rate adaptation
+                if adapt_lr:
+                    path_norm = torch.linalg.norm(path)
+                    factor = math.exp(c / (2 * d) * (path_norm - 1))
+                    new_lr = group['base_lr'] * factor
+                    group['lr'] = max(clamp_min, min(new_lr, clamp_max))
+
+                    # # # Optional logging
+                    # if step_num % log_interval == 0:
+                    #     print(f"[Step {step_num}] PathNorm={path_norm:.4f}, "
+                    #         f"CLARA factor={factor:.6f}, LR={group['lr']:.6e}, BaseLR={group['base_lr']:.6e}")
+
+
+        return loss
+
+
 # -------------------- Optimizer Factory --------------------
 
 
@@ -243,6 +396,10 @@ def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001):
         return AdamClaraLocal(model_parameters, lr=learning_rate)
     elif optimizer_name == "adam_clara_smoothed":
         return AdamClaraSmoothed(model_parameters, lr=learning_rate)
+    elif optimizer_name == "sgd_clara":
+        return SGD_CLARA(model_parameters, lr=learning_rate)
+    elif optimizer_name == "adam_clara":
+        return Adam_CLARA(model_parameters, lr=learning_rate)
     else:
         raise ValueError(f"Optimizer {optimizer_name} is not supported.")
 

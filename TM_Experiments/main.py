@@ -9,7 +9,9 @@ import os
 from src.datasets import load_dataset
 
 # Benchmarking Utilities
-from utils.benchmark import run_optimizer_benchmark, plot_results, plot_results_for_dataset
+from utils.benchmark import run_optimizer_benchmark, plot_results_for_dataset
+from datetime import datetime
+
 
 # ---------------------------------------------------------*/
 # Parameters
@@ -17,16 +19,17 @@ from utils.benchmark import run_optimizer_benchmark, plot_results, plot_results_
 
 # 1. Experiment Settings
 # ---------------------------------------------------------*/
-DOWNLOAD_DATASETS = 1   # Download and prepare datasets
+DOWNLOAD_DATASETS = 0   # Download and prepare datasets
 RUN_BENCHMARK = 1       # Run optimizer benchmark
 PLOT_RESULTS = 1        # Generate result plots
 
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
-DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
+# DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
+DATASETS = ["cifar100"]
 
-SUBSET = 5            # Percentage of dataset to use (use full)
+SUBSET = 100            # Percentage of dataset to use (use full)
 
 BATCH_SIZE = 128        # Batch size for training (adapted: 128 better for transformers too)
 
@@ -42,25 +45,19 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 2             # More realistic number of epochs
+EPOCHS = 5
 SEED = 42
 
 # 4. Optimizers to Benchmark
 # ---------------------------------------------------------*/
-OPTIMIZERS = ["SGD", "SGDMomentum", "Adam", "AdamW", "RMSProp",
-              "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed"]
+# OPTIMIZERS = ["SGD", "SGDMomentum", "Adam", "AdamW", "RMSProp",
+#               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed", "SGD_CLARA"]
+# OPTIMIZERS = ["SGD", "Adam", "AdamW", "SGD_CLARA",  "AdamW_CLARA"]
+OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam"]
 
-# OPTIMIZERS = ["SGD", "Adam",
-#               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed"]
-
-# Default Learning Rates per Optimizer
-OPTIMIZER_LR = {
-    "SGD": 0.0000001,
-    "Adam": 0.0000001,
-    "Adam_Clara_Global": 0.0000001,
-    "Adam_Clara_Local": 0.0000001,
-    "Adam_Clara_Smoothed": 0.0000001,
-}
+# Set a default learning rate for all optimizers
+# DEFAULT_LR = 0.0000001
+DEFAULT_LR = 0.001
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
@@ -99,42 +96,40 @@ if __name__ == "__main__":
         print(f"Starting Benchmarking 🚀")
         print("--------------------------------")
 
+        # 📅 Build timestamped result directory name
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        run_folder = f"{timestamp}_{EPOCHS}_DateTimeEpoch"
+        save_path_with_time = os.path.join(SAVE_DIR, run_folder)
+
         for dataset in DATASETS:
             if dataset not in NUM_CLASSES_DICT:
                 raise ValueError(f"Dataset {dataset} not found in NUM_CLASSES_DICT!")
 
-            dataset_result_dir = os.path.join(SAVE_DIR, dataset)
+            # 🗂️ Create dataset-specific subfolder in timestamped folder
+            dataset_result_dir = os.path.join(save_path_with_time, dataset)
             os.makedirs(dataset_result_dir, exist_ok=True)
 
             if dataset in ["wikitext", "bookcorpus"]:
                 batch_size = 8  # Much smaller for transformers
             else:
                 batch_size = BATCH_SIZE
-    
+
             for optimizer in OPTIMIZERS:
-                learning_rate = OPTIMIZER_LR.get(optimizer, 0.001)
 
                 run_optimizer_benchmark(
                     dataset_name=dataset,
                     optimizers=[optimizer],
-                    batch_size=BATCH_SIZE,
+                    batch_size=batch_size,
                     num_classes=NUM_CLASSES_DICT[dataset],
                     epochs=EPOCHS,
-                    learning_rate=learning_rate,
+                    learning_rate=DEFAULT_LR,
                     seed=SEED,
-                    save_dir=dataset_result_dir,  # ⚡ Save in dataset-specific folder
+                    save_dir=dataset_result_dir,  # ⚡ Save in timestamped/dataset folder
                     subset=SUBSET,
                 )
 
             # ⚡ After all optimizers finished -> Plot all results for this dataset
             plot_results_for_dataset(dataset_result_dir)
-
-        print("\n--------------------------------")
-        print("All tasks completed. 🌟")
-        print("--------------------------------")
-
-    if PLOT_RESULTS:
-        plot_results(SAVE_DIR, PLOT_DIR)
 
     print("\n--------------------------------")
     print("All tasks completed. 🌟")

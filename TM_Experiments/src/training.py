@@ -64,7 +64,8 @@ def train_model(model, train_loader, optimizer, epochs=10, device="cpu"):
             train_accuracies.append(0)  # Placeholder (language modeling accuracy is tricky)
 
         # Record learning rate
-        current_lr = optimizer.param_groups[0]['lr']
+        group = optimizer.param_groups[0]
+        current_lr = group.get("lr_effective", group["lr"])
         lr_history.append(current_lr)
 
         print(f"Epoch [{epoch+1}/{epochs}] - Loss: {epoch_loss:.2f}, "
