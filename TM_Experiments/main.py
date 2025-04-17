@@ -45,7 +45,7 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 5
+EPOCHS = 20
 SEED = 42
 
 # 4. Optimizers to Benchmark
@@ -56,13 +56,11 @@ SEED = 42
 OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam"]
 
 # Set a default learning rate for all optimizers
-# DEFAULT_LR = 0.0000001
-DEFAULT_LR = 0.001
+DEFAULT_LR = 0.0000001
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
 SAVE_DIR = "./results/"
-PLOT_DIR = "./results/plots/"
 
 # ---------------------------------------------------------*/
 # Run Functions

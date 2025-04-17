@@ -203,9 +203,10 @@ def plot_results_for_dataset(dataset_result_dir):
     ax.set_title("Learning Rate")
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Learning Rate")
+    ax.set_yscale("log")  # Set y-axis to logarithmic scale
     ax.legend()
     ax.grid()
-    ax.set_xticks(range(len(results[optimizers[0]]["lr_history"])))  # Nur ganzzahlige Labels
+    ax.set_xticks(range(len(results[optimizers[0]]["lr_history"])))  # Only integer labels
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
 
