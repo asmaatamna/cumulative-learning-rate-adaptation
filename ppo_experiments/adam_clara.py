@@ -74,13 +74,12 @@ class Adam_CLARA(torch.optim.Optimizer):
                 if 'step' not in state:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p)
+                    state['m'] = torch.zeros_like(p)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p)
+                    state['v'] = torch.zeros_like(p)
                     state['path'] = torch.zeros_like(p)
 
-                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
-                path = state['path']
+                m, v, path = state['m'], state['v'], state['path']
                 state['step'] += 1
                 t = state['step']
                 
@@ -89,8 +88,8 @@ class Adam_CLARA(torch.optim.Optimizer):
                     grad.add_(p, alpha=decay)
 
                 # Adam EMA updates
-                exp_avg.mul_(beta1).add_(grad, alpha=(1-beta1))
-                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1-beta2)
+                m.mul_(beta1).add_(grad, alpha=(1-beta1))
+                v.mul_(beta2).addcmul_(grad, grad, value=1-beta2)
                 
                 # Bias correction
                 bias_correction1 = 1 - beta1 ** t
@@ -98,10 +97,9 @@ class Adam_CLARA(torch.optim.Optimizer):
                 
                              
                 # Compute Adam step
-                m_hat = exp_avg / bias_correction1
-                v_hat = (exp_avg_sq / bias_correction2)
-                denom = v_hat.sqrt() + eps
-                adam_step = m_hat / denom  
+                m_hat = m / bias_correction1
+                v_hat = (v / bias_correction2)
+                adam_step = m_hat / (v_hat.sqrt() + eps)  
 
                 
                 # Normalize step direction
