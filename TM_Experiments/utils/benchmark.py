@@ -12,43 +12,95 @@ from src.training import train_model
 from src.testing import evaluate_model
 import pickle
 import matplotlib.pyplot as plt
+from tabulate import tabulate
+import time
 
-def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, seed, save_dir):
-    """Runs benchmarking for different optimizers on a given dataset.
 
-    Args:
-        dataset_name (str): Dataset to use ("mnist", "fmnist", "cifar10").
-        optimizers (list): List of optimizer names.
-        batch_size (int): Batch size for training/testing.
-        num_classes (int): Number of classes.
-        epochs (int): Number of training epochs.
-        learning_rate (float): Base learning rate.
-        seed (int): Random seed for reproducibility.
-        save_dir (str): Directory to save benchmark results.
-    """
+#---------------------------------------------------------*/
+# Parameters
+#---------------------------------------------------------*/
+OPTIMIZER_COLORS = {
+    "SGD": "blue",
+    "SGDMomentum": "cyan",
+    "Adam": "green",
+    "AdamW": "darkgreen",
+    "RMSProp": "brown",
+    "Adam_Clara_Global": "#FF6347",     # Tomato 
+    "Adam_Clara_Local": "#FF4500",      # OrangeRed
+    "Adam_Clara_Smoothed": "#DC143C",   # Crimson
+    "SGD_CLARA": "#1E90FF",          # DodgerBlue
+    "AdamW_CLARA": "#32CD32",       # LimeGreen
+}
+
+# Fallback if a color is missing
+DEFAULT_COLOR = "gray"
+
+def get_color(optimizer_name):
+    return OPTIMIZER_COLORS.get(optimizer_name, DEFAULT_COLOR)
+
+#---------------------------------------------------------*/
+# Benchmarking
+#---------------------------------------------------------*/
+
+def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, seed, save_dir, subset=100):
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    start_time = time.time()
 
-    # Set random seeds for reproducibility
     torch.manual_seed(seed)
     if device == "cuda":
         torch.cuda.manual_seed(seed)
 
-    # Load data
-    train_loader, test_loader = load_dataset(dataset_name, batch_size=batch_size)
+    # ----------------------------------------
+    # Load dataset
+    # ----------------------------------------
+    train_loader, test_loader = load_dataset(dataset_name, batch_size=batch_size, subset_percent=subset)
 
-    results = {}
+    # ----------------------------------------
+    # Special handling for tabular input_dim
+    # ----------------------------------------
+    input_dim = None
+    if dataset_name in ["breast_cancer", "iris", "wine", "digits"]:
+        first_batch = next(iter(train_loader))
+        inputs, _ = first_batch
+        input_dim = inputs.shape[1]
 
+    # ----------------------------------------
+    # Check if Language Dataset
+    # ----------------------------------------
+    is_language_model = dataset_name in ["tinystories", "wikitext", "language_toy", "bookcorpus"]
+
+    # ----------------------------------------
+    # Loop over optimizers
+    # ----------------------------------------
     for optimizer_name in optimizers:
-        print(f"\n=== Running Benchmark: {optimizer_name.upper()} on {dataset_name.upper()} ===")
+        # Choose correct model
+        
+        print(f"\n----- Training with optimizer: {optimizer_name} -----")    
+        print(f"\nRunning benchmark on {device.upper()} with dataset: {dataset_name.upper()}\n")
+        
+        if is_language_model:
+            model = load_model(dataset_name, num_classes=num_classes, input_dim=input_dim, model_type="tinytransformer")
+        else:
+            model = load_model(dataset_name, num_classes=num_classes, input_dim=input_dim)
 
-        # Load fresh model
-        model = load_model(dataset_name, num_classes=num_classes)
+        model.to(device)
 
-        # Load optimizer
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate=learning_rate)
 
-        # Train model
-        train_losses, train_accuracies = train_model(
+        # ⚡ Pass is_language_model here!
+        init_loss, init_accuracy = evaluate_model(
+            model, 
+            test_loader, 
+            device=device, 
+            is_language_model=is_language_model  # <-- HIER
+        )
+
+        train_losses = [init_loss]
+        train_accuracies = [init_accuracy]
+        lr_history = [optimizer.param_groups[0]['lr']]
+
+        t_losses, t_accuracies, t_lr = train_model(
             model=model,
             train_loader=train_loader,
             optimizer=optimizer,
@@ -56,102 +108,118 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
             device=device
         )
 
-        # Evaluate model
+        train_losses.extend(t_losses)
+        train_accuracies.extend(t_accuracies)
+        lr_history.extend(t_lr)
+
+        # ⚡ Again for final evaluation
         test_loss, test_accuracy = evaluate_model(
-            model=model,
-            test_loader=test_loader,
-            device=device
+            model, 
+            test_loader, 
+            device=device, 
+            is_language_model=is_language_model 
         )
 
-        # Save results
-        results[optimizer_name] = {
+        results = {
             "train_losses": train_losses,
             "train_accuracies": train_accuracies,
+            "lr_history": lr_history,
             "test_loss": test_loss,
             "test_accuracy": test_accuracy
         }
 
-    # Save all benchmark results
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+        result_file = os.path.join(save_dir, f"{optimizer_name}.pkl")
+        with open(result_file, "wb") as f:
+            pickle.dump(results, f)
 
-    results_file = os.path.join(save_dir, f"benchmark_{dataset_name}.pkl")
-    with open(results_file, "wb") as f:
-        pickle.dump(results, f)
+        print(f"✅ Saved benchmark for {optimizer_name.upper()}")
 
-    print(f"\n✅ Benchmarking completed. Results saved to {results_file}")
+    elapsed_time = time.time() - start_time
+    print(f"⏱️ Benchmark for {dataset_name.upper()} completed in {int(elapsed_time // 60)} min {elapsed_time % 60:.2f} sec")
 
-# ---------------------------------------------------------*\
-# Benchmark Results Plotting
 # ---------------------------------------------------------*/
+# Plot results for a specific dataset folder
+# ---------------------------------------------------------*/
+def plot_results_for_dataset(dataset_result_dir):
+    
+    result_files = [f for f in os.listdir(dataset_result_dir) if f.endswith(".pkl")]
+    if not result_files:
+        print(f"⚠️ No results to plot in {dataset_result_dir}")
+        return
 
-def plot_results(save_dir="./results/", plot_dir="./results/plots/"):
-    """Loads benchmark results and generates plots.
-
-    Args:
-        save_dir (str): Directory where benchmark .pkl files are stored.
-        plot_dir (str): Directory to save plots.
-    """
-    if not os.path.exists(plot_dir):
-        os.makedirs(plot_dir)
-
-    # Find all result files
-    result_files = [f for f in os.listdir(save_dir) if f.endswith(".pkl")]
-
+    results = {}
     for result_file in result_files:
-        dataset_name = result_file.replace("benchmark_", "").replace(".pkl", "")
+        optimizer_name = result_file.replace(".pkl", "")
+        with open(os.path.join(dataset_result_dir, result_file), "rb") as f:
+            results[optimizer_name] = pickle.load(f)
 
-        # Load results
-        with open(os.path.join(save_dir, result_file), "rb") as f:
-            results = pickle.load(f)
+    optimizers = list(results.keys())
 
-        # Prepare plots
-        optimizers = list(results.keys())
+    fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+    dataset_name = os.path.basename(dataset_result_dir)
+    fig.suptitle(f"Benchmark Results - {dataset_name.upper()}", fontsize=20)
 
-        # ---------------- Training Loss Plot ----------------
-        plt.figure(figsize=(10, 6))
-        for opt_name in optimizers:
-            plt.plot(results[opt_name]["train_losses"], label=opt_name)
-        plt.title(f"Training Loss - {dataset_name.upper()}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.legend()
-        plt.grid()
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f"{dataset_name}_train_loss.png"), dpi=300)
-        plt.show()
-        plt.close()
+    # Final Test Accuracy
+    ax = axs[0, 0]
+    test_accuracies = [results[opt]["test_accuracy"] for opt in optimizers]
+    sorted_data = sorted(zip(test_accuracies, optimizers))
+    sorted_accuracies, sorted_optimizers = zip(*sorted_data)
 
-        # ---------------- Training Accuracy Plot ----------------
-        plt.figure(figsize=(10, 6))
-        for opt_name in optimizers:
-            plt.plot(results[opt_name]["train_accuracies"], label=opt_name)
-        plt.title(f"Training Accuracy - {dataset_name.upper()}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy (%)")
-        plt.legend()
-        plt.grid()
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f"{dataset_name}_train_accuracy.png"), dpi=300)
-        plt.show()
-        plt.close()
+    colors = [get_color(opt) for opt in sorted_optimizers]
 
-        # ---------------- Final Test Accuracy Bar Plot ----------------
-        test_accuracies = [results[opt]["test_accuracy"] for opt in optimizers]
+    ax.bar(sorted_optimizers, sorted_accuracies, color=colors)
+    ax.set_title("Final Test Accuracy")
+    ax.set_ylabel("Accuracy (%)")
+    ax.set_xticks(range(len(sorted_optimizers)))
+    ax.set_xticklabels(sorted_optimizers, rotation=45)
+    ax.grid(axis="y")
 
-        plt.figure(figsize=(8, 6))
-        plt.bar(optimizers, test_accuracies)
-        plt.title(f"Final Test Accuracy - {dataset_name.upper()}")
-        plt.xlabel("Optimizer")
-        plt.ylabel("Accuracy (%)")
-        plt.xticks(rotation=45)
-        plt.grid(axis='y')
-        plt.tight_layout()
-        plt.savefig(os.path.join(plot_dir, f"{dataset_name}_test_accuracy.png"), dpi=300)
-        plt.show()
-        plt.close()
+    # Training Accuracy
+    ax = axs[0, 1]
+    for opt_name in optimizers:
+        ax.plot(results[opt_name]["train_accuracies"], label=opt_name, color=get_color(opt_name))
+    ax.set_title("Training Accuracy")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Accuracy (%)")
+    ax.legend()
+    ax.grid()
+    ax.set_xticks(range(len(results[optimizers[0]]["train_accuracies"])))  # Nur ganzzahlige Labels
+    
+    # Training Loss
+    ax = axs[1, 0]
+    for opt_name in optimizers:
+        ax.plot(results[opt_name]["train_losses"], label=opt_name, color=get_color(opt_name))
+    ax.set_title("Training Loss")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.legend()
+    ax.grid()
+    ax.set_xticks(range(len(results[optimizers[0]]["train_losses"])))  # Nur ganzzahlige Labels
+    
+    # Learning Rate
+    ax = axs[1, 1]
+    for opt_name in optimizers:
+        ax.plot(results[opt_name]["lr_history"], label=opt_name, color=get_color(opt_name))
+    ax.set_title("Learning Rate")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Learning Rate")
+    ax.set_yscale("log")  # Set y-axis to logarithmic scale
+    ax.legend()
+    ax.grid()
+    ax.set_xticks(range(len(results[optimizers[0]]["lr_history"])))  # Only integer labels
 
-        print(f"✅ Plots saved for {dataset_name.upper()} in {plot_dir}")
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+    save_path_png = os.path.join(dataset_result_dir, "benchmark_plot.png")
+    save_path_svg = os.path.join(dataset_result_dir, "benchmark_plot.svg")
+
+    plt.savefig(save_path_png, dpi=300)
+    plt.savefig(save_path_svg)
+    plt.show()
+    plt.close()
+
+    print(f"✅ Saved benchmark plot to {save_path_png}")
+
 
 #-------------------------Notes-----------------------------------------------*\
 # 
