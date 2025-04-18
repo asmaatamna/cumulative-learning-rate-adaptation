@@ -29,6 +29,7 @@ sys.path.append(dir_containergym)
 
 from custom_actor_critic_policy import CustomActorCriticPolicy
 from env import ContainerEnv
+from adam_clara import Adam_CLARA
 
 # os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH')
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -47,7 +48,7 @@ class LearningRateLoggerCallback(BaseCallback):
         self.adam_update_buffer = []
         self.lr_buffer = []
 
-        self.items_to_save_at_once = 100
+        self.items_to_save_at_once = 5
     
     # Called right before training starts. Allows access to fully initialized model and environment.
     def _init_callback(self):
@@ -57,7 +58,8 @@ class LearningRateLoggerCallback(BaseCallback):
                 json.dump([], f)  # Start with an empty list
 
         # Initialize Adam updates (steps added to current solution) JSON file if it does not exist
-        if self.model.policy.optimizer.__class__ == torch.optim.Adam:
+        self.adam_likes = [torch.optim.Adam, torch.optim.AdamW, torch.optim.Adamax, Adam_CLARA]
+        if self.model.policy.optimizer.__class__ in self.adam_likes:
             if not os.path.exists(self.updates_path):
                 with open(self.updates_path, 'w') as f:
                     json.dump([], f)  # Start with an empty list
@@ -80,7 +82,7 @@ class LearningRateLoggerCallback(BaseCallback):
 
     def get_adam_update(self):
         stacked_updates = []
-        if self.model.policy.optimizer.__class__ == torch.optim.Adam:
+        if self.model.policy.optimizer.__class__ in self.adam_likes:
             optimizer = self.model.policy.optimizer
 
             updates = []

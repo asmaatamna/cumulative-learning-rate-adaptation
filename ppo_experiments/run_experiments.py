@@ -6,6 +6,7 @@ import argparse
 from utilities import run_all_experiments_on_containergym, run_all_experiments_on_gymnasium, linear_schedule
 import dadaptation
 import prodigyopt
+from adam_clara import Adam_CLARA
 
 
 def main(environment, optimizer, lr0):
@@ -27,6 +28,7 @@ def main(environment, optimizer, lr0):
     damping = 0.05  # Damping for cumulative learning rate adaptation
     dir_experiment = 'ppo_'
 
+    optimizer_kwargs = {}
     # Set optimizer to be used by PPO
     if optimizer == 0:  # Default Adam without lr adaptation
         dir_experiment += 'adam_'
@@ -44,16 +46,19 @@ def main(environment, optimizer, lr0):
     elif optimizer == 4:
         dir_experiment += 'adam_adaptive_lr_'
         optimizer_class = torch.optim.Adam
+    elif optimizer == 5:  # CLARA Adam
+        dir_experiment += 'adam_clara_'
+        optimizer_class = Adam_CLARA
+        optimizer_kwargs['c'] = 0.2 # CLARA smoothing factor
+        optimizer_kwargs['d'] = 1.0 # CLARA damping factor
     else:
         dir_experiment += 'adam_'
         optimizer_class = torch.optim.Adam
 
     # Prepare policy (incl. optimizer) arguments to pass to PPO
     policy_kwargs = dict(
-        optimizer_class=optimizer_class
-        # optimizer_kwargs=dict(
-        #     log_every=adam_adapt_log_every
-        # )
+        optimizer_class=optimizer_class,
+        optimizer_kwargs=optimizer_kwargs
     )
 
     if environment == 0:  # ContainerGym
@@ -113,6 +118,17 @@ def main(environment, optimizer, lr0):
                                                 policy_kwargs=policy_kwargs,
                                                 damping=damping,
                                                 adaptive_lr=True)
+        if optimizer == 5:
+            run_all_experiments_on_containergym(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
+                                                dir_configs=dir_configs,
+                                                config_names=config_names,
+                                                n_models=n_models,
+                                                learning_rate=learning_rate,
+                                                default_actor_critic_arch=False,
+                                                policy_kwargs=policy_kwargs,
+                                                adaptive_lr=False)
+                
+        
     if environment == 1:  # Gymnasium environments
         env_names = ['LunarLander-v3',
                      'BipedalWalker-v3',
@@ -175,7 +191,8 @@ if __name__ == '__main__':
                               '1: Adam with linear lr schedule, '
                               '2: D-Adaptation, '
                               '3: Prodigy, '
-                              '4: Adam with adaptive lr'
+                              '4: Adam with adaptive lr, '
+                              '5: Adam with CLARA'
                               )
                         )
     parser.add_argument('-lr', '--learning-rate', type=float, default=3e-4,
