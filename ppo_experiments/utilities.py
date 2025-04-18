@@ -24,12 +24,15 @@ currentFile = abspath(__file__)
 currentFolder = dirname(currentFile)
 parentFolder = dirname(currentFolder)
 dir_containergym = parentFolder + '/containergym'
+dir_optimizers = parentFolder + '/optimizers'
 
 sys.path.append(dir_containergym)
+sys.path.append(dir_optimizers)
 
 from custom_actor_critic_policy import CustomActorCriticPolicy
 from env import ContainerEnv
 from adam_clara import Adam_CLARA
+from sgd_clara import SGD_CLARA
 
 # os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH')
 os.environ['CUDA_VISIBLE_DEVICES'] = ''

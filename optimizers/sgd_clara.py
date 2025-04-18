@@ -1,6 +1,7 @@
 from torch.optim.optimizer import Optimizer, required
 import copy
 import math
+import torch
 
 class SGD_CLARA(Optimizer):
     r"""Implements vanilla Gradient Descent with Cumulative Learning Rate Adaptation (CLARA).
