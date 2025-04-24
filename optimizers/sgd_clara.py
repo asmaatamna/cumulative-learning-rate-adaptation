@@ -12,8 +12,13 @@ class SGD_CLARA(Optimizer):
     """
 
     def __init__(self, params, lr=1e-3, c=0.2, d=1.0, adapt_lr=True):
-        defaults = dict(lr=lr, c=c, d=d, adapt_lr=adapt_lr)
+        c2 = math.sqrt(c * (2 - c))
+        
+        defaults = dict(lr=lr, c=c, c2=c2, d=d, adapt_lr=adapt_lr)
+        
         super(SGD_CLARA, self).__init__(params, defaults)
+        
+        
 
     def __setstate__(self, state):
         super(SGD_CLARA, self).__setstate__(state)
@@ -30,6 +35,7 @@ class SGD_CLARA(Optimizer):
 
         for group in self.param_groups:
             c = group['c']  # Smoothing factor for path
+            c2 = group['c2']  # Precomputed value derived from c
             d = group['d']  # Damping factor used is CLARA
             adapt_lr = group['adapt_lr']  # Whether to update learning rate
 
@@ -44,7 +50,7 @@ class SGD_CLARA(Optimizer):
                     state['path'] = torch.zeros_like(p.data)
 
                 state['step'] += 1
-                step = grad  # TODO: Check whether copying grad is necessary
+                step = grad  # TODO: Check whether copying grad is necessary (Fabian: grad is not used outside this function so its fine)
 
                 if adapt_lr:
                     step_norm = torch.linalg.norm(step)
@@ -55,7 +61,6 @@ class SGD_CLARA(Optimizer):
                 p.data.add_(step, alpha=-group['lr'])
 
                 # Update path
-                c2 = math.sqrt(c * (2 - c))  # TODO: Compute once only
                 state['path'].mul_(1 - c).add_(step, alpha=c2)
 
                 # Cumulative Learning Rate Adaptation (CLARA)

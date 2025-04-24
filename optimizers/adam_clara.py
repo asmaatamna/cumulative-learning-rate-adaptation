@@ -36,6 +36,7 @@ class Adam_CLARA(torch.optim.Optimizer):
         
         defaults = dict(lr=lr, betas=betas, eps=eps,
                         c=c, d=d, weight_decay=weight_decay)
+        
         super().__init__(params, defaults)
 
     @torch.no_grad()
