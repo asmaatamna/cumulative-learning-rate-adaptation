@@ -19,6 +19,8 @@ from utilities import run_all_experiments_on_containergym, run_all_experiments_o
 from adam_clara import Adam_CLARA
 from sgd_clara import SGD_CLARA
 
+device = torch.device("cpu")
+
 
 def main(environment, optimizer, lr0):
     current_file = abspath(__file__)
@@ -29,7 +31,7 @@ def main(environment, optimizer, lr0):
 
     sys.path.append(dir_containergym)
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+    #os.environ['CUDA_VISIBLE_DEVICES'] = ''
     torch.set_num_threads(1)
 
     n_models = 5
@@ -90,7 +92,7 @@ def main(environment, optimizer, lr0):
                                                 learning_rate=learning_rate,
                                                 default_actor_critic_arch=False,
                                                 policy_kwargs=policy_kwargs)
-
+            
         if optimizer == 1:
             run_all_experiments_on_containergym(dir_experiment=dir_experiment + "_lr0_" + str(lr0),
                                                 dir_configs=dir_configs,
@@ -130,6 +132,7 @@ def main(environment, optimizer, lr0):
                                                 policy_kwargs=policy_kwargs,
                                                 damping=damping,
                                                 adaptive_lr=True)
+            
         if optimizer == 5:
             run_all_experiments_on_containergym(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
                                                 dir_configs=dir_configs,
@@ -137,8 +140,8 @@ def main(environment, optimizer, lr0):
                                                 n_models=n_models,
                                                 learning_rate=learning_rate,
                                                 default_actor_critic_arch=False,
-                                                policy_kwargs=policy_kwargs,
-                                                adaptive_lr=False)
+                                                policy_kwargs=policy_kwargs)
+            
         if optimizer == 6:
             run_all_experiments_on_containergym(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
                                                 dir_configs=dir_configs,
@@ -146,8 +149,7 @@ def main(environment, optimizer, lr0):
                                                 n_models=n_models,
                                                 learning_rate=learning_rate,
                                                 default_actor_critic_arch=False,
-                                                policy_kwargs=policy_kwargs,
-                                                adaptive_lr=False)
+                                                policy_kwargs=policy_kwargs)
                 
         
     if environment == 1:  # Gymnasium environments
@@ -168,6 +170,7 @@ def main(environment, optimizer, lr0):
                                              n_models=n_models,
                                              learning_rate=learning_rate,
                                              policy_kwargs=policy_kwargs)
+            
         if optimizer == 1:
             run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(lr0),
                                              env_names=env_names,
@@ -200,20 +203,20 @@ def main(environment, optimizer, lr0):
                                              policy_kwargs=policy_kwargs,
                                              damping=damping,
                                              adaptive_lr=True)
+            
         if optimizer == 5:
             run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
                                              env_names=env_names,
                                              n_models=n_models,
                                              learning_rate=learning_rate,
-                                             policy_kwargs=policy_kwargs,
-                                             adaptive_lr=False)
+                                             policy_kwargs=policy_kwargs)
+            
         if optimizer == 6:
             run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
                                              env_names=env_names,
                                              n_models=n_models,
                                              learning_rate=learning_rate,
-                                             policy_kwargs=policy_kwargs,
-                                             adaptive_lr=False)
+                                             policy_kwargs=policy_kwargs)
 
 
 if __name__ == '__main__':

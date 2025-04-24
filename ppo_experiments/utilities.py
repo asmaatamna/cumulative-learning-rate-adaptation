@@ -35,8 +35,10 @@ from adam_clara import Adam_CLARA
 from sgd_clara import SGD_CLARA
 
 # os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH')
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
+# os.environ['CUDA_VISIBLE_DEVICES'] = ''
 torch.set_num_threads(1)
+
+device = torch.device("cpu")
 
 
 # TODO: Write proper docstrings for all methods
@@ -426,7 +428,7 @@ def plot_learning_curves(dir_experiment, config_names, n_models=15):
 
 
 def get_model_by_path(model_path, env, policy_kwargs=None):
-    return PPO.load(model_path, env, policy_kwargs=policy_kwargs)
+    return PPO.load(model_path, env, policy_kwargs=policy_kwargs, device=device)
 
 
 def write_results_to_txt(test_results, experiment_path):
@@ -476,10 +478,10 @@ def train_on_containergym(model_path,
 
     # If policy_kwargs contains a 'net_arch' key, use custom Actor-Critic architecture
     if 'net_arch' in policy_kwargs:
-        model = PPO(CustomActorCriticPolicy, env, seed=seed, learning_rate=learning_rate, verbose=0,
+        model = PPO(CustomActorCriticPolicy, env, seed=seed, learning_rate=learning_rate, verbose=0, device=device,
                     policy_kwargs=policy_kwargs)
     else:
-        model = PPO(MultiInputActorCriticPolicy, env, seed=seed, learning_rate=learning_rate,
+        model = PPO(MultiInputActorCriticPolicy, env, seed=seed, learning_rate=learning_rate, device=device,
                     policy_kwargs=policy_kwargs)
 
     callback_list = [SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0), 
@@ -709,7 +711,7 @@ def train_on_gymnasium(model_path, env_name, timesteps, seed=None, learning_rate
 
     _, _ = env.reset(seed=seed)
 
-    model = PPO('MlpPolicy', env, seed=seed, learning_rate=learning_rate, verbose=0, policy_kwargs=policy_kwargs)
+    model = PPO('MlpPolicy', env, seed=seed, learning_rate=learning_rate, verbose=0, policy_kwargs=policy_kwargs, device=device)
 
     callback_list = [SaveOnBestTrainingRewardCallback(check_freq=5000, log_dir=model_path, verbose=0), 
                      LearningRateLoggerCallback(log_dir=model_path)]
