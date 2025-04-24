@@ -50,7 +50,7 @@ class SGD_CLARA(Optimizer):
                     state['path'] = torch.zeros_like(p.data)
 
                 state['step'] += 1
-                step = grad  # TODO: Check whether copying grad is necessary (Fabian: grad is not used outside this function so its fine)
+                step = grad  # TODO: Check whether copying grad is necessary (Fabian: the logger callback sees the gradients before the optimizer step, so its fine)
 
                 if adapt_lr:
                     step_norm = torch.linalg.norm(step)
