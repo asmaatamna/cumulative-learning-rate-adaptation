@@ -55,10 +55,10 @@ class LearningRateLoggerCallback(BaseCallback):
     
     # Called right before training starts. Allows access to fully initialized model and environment.
     def _init_callback(self):
-        # Initialize gradients (steps added to current solution) JSON file if it does not exist
-        if not os.path.exists(self.gradients_path):
-            with open(self.gradients_path, 'w') as f:
-                json.dump([], f)  # Start with an empty list
+        # # Initialize gradients (steps added to current solution) JSON file if it does not exist
+        # if not os.path.exists(self.gradients_path):
+        #     with open(self.gradients_path, 'w') as f:
+        #         json.dump([], f)  # Start with an empty list
 
         # Initialize Adam updates (steps added to current solution) JSON file if it does not exist
         self.adam_likes = [torch.optim.Adam, torch.optim.AdamW, torch.optim.Adamax, Adam_CLARA]
@@ -178,9 +178,9 @@ class LearningRateLoggerCallback(BaseCallback):
 
         current_timestep = self.model.num_timesteps
 
-        # Get latest gradients and append to buffer
-        gradients = self.get_gradients()
-        self.add_gradients_to_buffer(current_timestep, gradients)
+        # # Get latest gradients and append to buffer
+        # gradients = self.get_gradients()
+        # self.add_gradients_to_buffer(current_timestep, gradients)
 
         # Get latest adam updates and append to buffer
         adam_updates = self.get_adam_update()
@@ -190,10 +190,10 @@ class LearningRateLoggerCallback(BaseCallback):
         lr_update = self.get_lr_update()
         self.add_lr_update_to_buffer(current_timestep, lr_update)
 
-        # If a buffer is full enough, write entire buffer to disk
-        if len(self.gradients_buffer) >= self.items_to_save_at_once:
-            self.write_gradients_buffer_to_disk()
-            self.reset_gradients_buffer()
+        # # If a buffer is full enough, write entire buffer to disk
+        # if len(self.gradients_buffer) >= self.items_to_save_at_once:
+        #     self.write_gradients_buffer_to_disk()
+        #     self.reset_gradients_buffer()
 
         if len(self.adam_update_buffer) >= self.items_to_save_at_once:
             self.write_adam_update_buffer_to_disk()
@@ -204,9 +204,9 @@ class LearningRateLoggerCallback(BaseCallback):
             self.reset_lr_update_buffer()
 
     def _on_training_end(self):
-        # Write the remaining data in buffers to disk
-        self.write_gradients_buffer_to_disk()
-        self.reset_gradients_buffer()
+        # # Write the remaining data in buffers to disk
+        # self.write_gradients_buffer_to_disk()
+        # self.reset_gradients_buffer()
 
         self.write_adam_update_buffer_to_disk()
         self.reset_adam_update_buffer()
@@ -237,11 +237,10 @@ class AdaptiveLearningRateCallback(BaseCallback):
                     if 'exp_avg' in state and 'exp_avg_sq' in state:
                         m_t = state['exp_avg']
                         v_t = state['exp_avg_sq']
-                        # step_size = optimizer.param_groups[0]['lr']  # TODO: Remove step_size
                         eps = optimizer.param_groups[0]['eps']
 
                         # Compute the Adam update step
-                        update_step = -m_t / (torch.sqrt(v_t) + eps)  # TODO: Remove step_size
+                        update_step = -m_t / (torch.sqrt(v_t) + eps)
                         updates.append(update_step.view(-1))  # Flatten each update
                         
             if updates:

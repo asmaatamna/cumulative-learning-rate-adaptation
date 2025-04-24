@@ -152,9 +152,9 @@ def main(environment, optimizer, lr0):
         
     if environment == 1:  # Gymnasium environments
         env_names = ['LunarLander-v3',
-                     'BipedalWalker-v3',
-                     'Acrobot-v1',
-                     'Pendulum-v1',
+                     # 'BipedalWalker-v3',
+                     # 'Acrobot-v1',
+                     # 'Pendulum-v1',
                      # 'Pong-v5',
                      # 'Ant-v5',
                      # 'Humanoid-v5'
@@ -200,6 +200,20 @@ def main(environment, optimizer, lr0):
                                              policy_kwargs=policy_kwargs,
                                              damping=damping,
                                              adaptive_lr=True)
+        if optimizer == 5:
+            run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
+                                             env_names=env_names,
+                                             n_models=n_models,
+                                             learning_rate=learning_rate,
+                                             policy_kwargs=policy_kwargs,
+                                             adaptive_lr=False)
+        if optimizer == 6:
+            run_all_experiments_on_gymnasium(dir_experiment=dir_experiment + '_lr0_' + str(learning_rate),
+                                             env_names=env_names,
+                                             n_models=n_models,
+                                             learning_rate=learning_rate,
+                                             policy_kwargs=policy_kwargs,
+                                             adaptive_lr=False)
 
 
 if __name__ == '__main__':
