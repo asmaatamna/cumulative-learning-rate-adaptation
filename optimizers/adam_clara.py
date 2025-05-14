@@ -121,11 +121,10 @@ class Adam_CLARA(torch.optim.Optimizer):
         # Global learning rate adaptation
         if total_params > 0:
             full_path = torch.cat(all_paths)
-            dim = full_path.size(0)
             
             # Calculate learning rate adjustment
-            path_norm_sq = torch.norm(full_path).pow(2).item()
-            lr_multiplier = math.exp(c / (2 * d) * (path_norm_sq/dim - 1))
+            path_norm = torch.norm(full_path).item()
+            lr_multiplier = math.exp(c / (2 * d) * (path_norm - 1))
             
             # Update learning rate for all groups
             for group in self.param_groups:
