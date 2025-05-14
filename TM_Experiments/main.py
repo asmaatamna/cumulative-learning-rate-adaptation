@@ -27,7 +27,8 @@ PLOT_RESULTS = 1        # Generate result plots
 # ---------------------------------------------------------*/
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
-DATASETS = ["cifar100"]
+# DATASETS = ["cifar100"]
+DATASETS = ["mnist"]
 
 SUBSET = 100            # Percentage of dataset to use (use full)
 
@@ -45,7 +46,7 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 20
+EPOCHS = 10
 SEED = 42
 
 # 4. Optimizers to Benchmark
@@ -53,10 +54,11 @@ SEED = 42
 # OPTIMIZERS = ["SGD", "SGDMomentum", "Adam", "AdamW", "RMSProp",
 #               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed", "SGD_CLARA"]
 # OPTIMIZERS = ["SGD", "Adam", "AdamW", "SGD_CLARA",  "AdamW_CLARA"]
-OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam"]
+# OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam", "AdamW"]
+OPTIMIZERS = ["Adam_CLARA", "SGD", "SGD_CLARA", "Adam", ]
 
 # Set a default learning rate for all optimizers
-DEFAULT_LR = 0.0000001
+DEFAULT_LR = 0.001
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
