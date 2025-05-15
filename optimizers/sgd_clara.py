@@ -23,6 +23,7 @@ class SGD_CLARA(Optimizer):
     def __setstate__(self, state):
         super(SGD_CLARA, self).__setstate__(state)
 
+    @torch.no_grad()
     def step(self, closure=None):
         """ Performs a single optimization step.
         Arguments:
@@ -65,6 +66,6 @@ class SGD_CLARA(Optimizer):
 
                 # Cumulative Learning Rate Adaptation (CLARA)
                 if adapt_lr:
-                    group['lr'] *= math.exp(c / (2 * d) * (torch.linalg.norm(state['path']) - 1))
+                    group['lr'] *= math.exp(c / (2 * d) * (torch.linalg.norm(state['path']) - 1))  # TODO: norm().item()?
 
         return loss

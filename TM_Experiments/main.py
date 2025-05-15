@@ -55,10 +55,10 @@ SEED = 42
 #               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed", "SGD_CLARA"]
 # OPTIMIZERS = ["SGD", "Adam", "AdamW", "SGD_CLARA",  "AdamW_CLARA"]
 # OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam", "AdamW"]
-OPTIMIZERS = ["Adam_CLARA", "SGD", "SGD_CLARA", "Adam", ]
+OPTIMIZERS = ["SGD", "SGD_CLARA", "Adam", "Adam_CLARA"]  # ["Adam_CLARA", "SGD", "SGD_CLARA", "Adam", ]
 
 # Set a default learning rate for all optimizers
-DEFAULT_LR = 0.001
+DEFAULT_LR = 1e-6  # 0.001  # 1e-1  # 1e-6  # 1
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
