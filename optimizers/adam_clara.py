@@ -25,7 +25,8 @@ class Adam_CLARA(torch.optim.Optimizer):
 
     def __init__(self, params, lr=1.0,
                  betas=(0.9, 0.999), eps=1e-8,
-                 c=0.2, d=1, adapt_lr=True,
+                 c=0.2, d=None, adapt_lr=True,
+                 unit_step_direction=True,
                  weight_decay=0):
         if not 0.0 < lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -36,10 +37,32 @@ class Adam_CLARA(torch.optim.Optimizer):
         if not 0.0 <= betas[1] < 1.0:
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
 
-        defaults = dict(lr=lr, adapt_lr=adapt_lr, betas=betas, eps=eps,
+        # Initialize optimizer first
+        defaults = dict(lr=lr, adapt_lr=adapt_lr, unit_step_direction=unit_step_direction, betas=betas, eps=eps,
                         c=c, d=d, weight_decay=weight_decay)
 
         super().__init__(params, defaults)
+
+        # Now self.param_groups is available
+        self.total_params = 0
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.requires_grad:
+                    self.total_params += p.numel()
+
+        # Compute dependent values
+        mu = c / (2 - c)  # Mean of norm squared of uniformly sampled cumulated random steps. See Sebag et al. 2017
+        sigma = math.sqrt(2) * mu * (1 - c) / math.sqrt(((1 - c) ** 2 + 1) * self.total_params)  # Standard deviation
+
+        # Define damping if no default value passed
+        if d is None:
+            d = 2 * sigma
+
+        # Save these to each param group
+        for group in self.param_groups:
+            group['mu'] = mu
+            group['sigma'] = sigma
+            group['d'] = d
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -66,6 +89,9 @@ class Adam_CLARA(torch.optim.Optimizer):
             lr = group['lr']
             beta1, beta2 = group['betas']
             adapt_lr = group['adapt_lr']  # Whether to update learning rate
+            unit_step_direction = group['unit_step_direction']  # Whether to use normalized gradient to update parameters
+            mu = group['mu']
+            sigma = group['sigma']
 
             for p in group['params']:
                 i += 1
@@ -106,9 +132,11 @@ class Adam_CLARA(torch.optim.Optimizer):
                 v_hat = (v / bias_correction2)
                 adam_step = m_hat / (v_hat.sqrt() + eps)
 
-                if adapt_lr:
+                # Calculate step norm
+                step_norm = torch.norm(adam_step)
+
+                if adapt_lr and unit_step_direction:
                     # Normalize step direction
-                    step_norm = torch.norm(adam_step)
                     if step_norm > 0:
                         adam_step.div_(step_norm)
 
@@ -116,8 +144,10 @@ class Adam_CLARA(torch.optim.Optimizer):
                 p.data.add_(adam_step, alpha=-lr)
 
                 # Update CLARA path (exponential moving average of normalized steps)
-                # path.mul_(1 - c).add_(adam_step / torch.linalg.norm(adam_step), alpha=math.sqrt(c * (2 - c)))
-                path.mul_(1 - c).add_(adam_step, alpha=math.sqrt(c * (2 - c)))
+                if adapt_lr and unit_step_direction:
+                    path.mul_(1 - c).add_(adam_step, alpha=c)
+                else:
+                    path.mul_(1 - c).add_(adam_step / step_norm, alpha=c)  # TODO: Divide by norm only if not zero
 
                 # Collect path information
                 all_paths.append(path.flatten())
@@ -127,11 +157,11 @@ class Adam_CLARA(torch.optim.Optimizer):
         if total_params > 0:
             full_path = torch.cat(all_paths)
 
-            # Calculate learning rate adjustment
-            path_norm = torch.linalg.norm(full_path).item()
-            lr_multiplier = math.exp(c / (2 * d) * (path_norm / i - 1))
-
+            path_norm = torch.linalg.norm(full_path).pow(2).item()
             if adapt_lr:
+                # Calculate learning rate adjustment
+                lr_multiplier = math.exp(d * (path_norm / (self.total_params * mu) - 1))
+
                 # Update learning rate for all groups
                 for group in self.param_groups:
                     group['lr'] *= lr_multiplier
