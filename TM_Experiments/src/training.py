@@ -68,8 +68,10 @@ def train_model(model, train_loader, optimizer, epochs=10, device="cpu"):
         current_lr = group.get("lr_effective", group["lr"])
         lr_history.append(current_lr)
 
+        # lrs = [group['lr'] for group in optimizer.param_groups]  # TODO: There can be more than 1 lr
+
         print(f"Epoch [{epoch+1}/{epochs}] - Loss: {epoch_loss:.2f}, "
-              f"{'Accuracy: ' + str(f'{epoch_accuracy:.2f}') + '%' if not is_language_model else 'Language Model'} "
+              f"{'Accuracy: ' + str(f'{epoch_accuracy:.2f}') + '%, ' if not is_language_model else 'Language Model'} "
               f"LR: {current_lr:.2e}")
 
     return train_losses, train_accuracies, lr_history

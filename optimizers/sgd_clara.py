@@ -11,14 +11,31 @@ class SGD_CLARA(Optimizer):
 
     """
 
-    def __init__(self, params, lr=1e-3, c=0.2, d=1.0, adapt_lr=True):
-        c2 = math.sqrt(c * (2 - c))
-        
-        defaults = dict(lr=lr, c=c, c2=c2, d=d, adapt_lr=adapt_lr)
-        
+    def __init__(self, params, lr=1e-3, c=0.2, d=None, adapt_lr=True, unit_step_direction=True):
+        # Initialize optimizer first
+        defaults = dict(lr=lr, c=c, d=d, adapt_lr=adapt_lr, unit_step_direction=unit_step_direction)  # partial init
         super(SGD_CLARA, self).__init__(params, defaults)
-        
-        
+
+        # Now self.param_groups is available
+        self.total_params = 0
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.requires_grad:
+                    self.total_params += p.numel()
+
+        # Compute dependent values
+        mu = c / (2 - c)  # Mean of norm squared of uniformly sampled cumulated random steps. See Sebag et al. 2017
+        sigma = math.sqrt(2) * mu * (1 - c) / math.sqrt(((1 - c) ** 2 + 1) * self.total_params)  # Standard deviation
+
+        # Define damping if no default value passed
+        if d is None:
+            d = 2 * sigma
+
+        # Save these to each param group
+        for group in self.param_groups:
+            group['mu'] = mu
+            group['sigma'] = sigma
+            group['d'] = d
 
     def __setstate__(self, state):
         super(SGD_CLARA, self).__setstate__(state)
@@ -34,38 +51,84 @@ class SGD_CLARA(Optimizer):
         if closure is not None:
             loss = closure()
 
+        grads = []  # To collect flattened gradients
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad = p.grad.detach()
+
+                # Flatten and collect
+                grads.append(grad.view(-1))
+
+        if grads:
+            all_grads = torch.cat(grads)
+            # Now you can use `all_grads` as a single gradient vector
+
+            # Example: compute its norm
+            grad_norm = torch.linalg.norm(all_grads).item()
+            # print("Gradient norm:", grad_norm)
+
+        # Collect all paths for global learning rate adjustment
+        all_paths = []
+        total_params = 0  # Total number of scalar parameters
+
+        param_tensor_counter = 0
         for group in self.param_groups:
             c = group['c']  # Smoothing factor for path
-            c2 = group['c2']  # Precomputed value derived from c
             d = group['d']  # Damping factor used is CLARA
             adapt_lr = group['adapt_lr']  # Whether to update learning rate
+            unit_step_direction = group['unit_step_direction']  # Whether to use normalized gradient to update parameters
+            mu = group['mu']
+            sigma = group['sigma']
 
             for p in group['params']:
+                param_tensor_counter += 1
                 if p.grad is None:
                     continue
                 grad = p.grad.data
                 state = self.state[p]
 
-                if len(state) == 0:
+                if 'step' not in state:
                     state['step'] = 0
                     state['path'] = torch.zeros_like(p.data)
+                    state['path2'] = torch.zeros_like(p.data)
 
+                path = state['path']
                 state['step'] += 1
                 step = grad  # TODO: Check whether copying grad is necessary (Fabian: the logger callback sees the gradients before the optimizer step, so its fine)
 
-                if adapt_lr:
-                    step_norm = torch.linalg.norm(step)
-                    if step_norm > 0:
-                        step.div_(step_norm)
+                if adapt_lr and unit_step_direction:
+                    if grad_norm > 0:
+                        step.div_(grad_norm)
 
                 # Calculate "gradient descent" update
                 p.data.add_(step, alpha=-group['lr'])
 
                 # Update path
-                state['path'].mul_(1 - c).add_(step, alpha=c2)
+                if adapt_lr and unit_step_direction:
+                    path.mul_(1 - c).add_(step, alpha=c)
+                else:
+                    path.mul_(1 - c).add_(step / grad_norm, alpha=c)
 
-                # Cumulative Learning Rate Adaptation (CLARA)
-                if adapt_lr:
-                    group['lr'] *= math.exp(c / (2 * d) * (torch.linalg.norm(state['path']) - 1))  # TODO: norm().item()?
+                # Collect path information
+                all_paths.append(path.flatten())
+                total_params += path.numel()
+
+        # Global learning rate adaptation
+        if total_params > 0:
+            full_path = torch.cat(all_paths)
+
+            # Calculate learning rate adjustment
+            path_norm = torch.linalg.norm(full_path).pow(2).item()
+
+            # Cumulative Learning Rate Adaptation (CLARA)
+            if adapt_lr:
+                # Compute lr factor
+                lr_multiplier = math.exp(d * (path_norm / mu - 1))
+
+                # Update learning rate for all groups
+                for group in self.param_groups:
+                    group['lr'] *= lr_multiplier
 
         return loss
