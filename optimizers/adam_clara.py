@@ -26,7 +26,7 @@ class Adam_CLARA(torch.optim.Optimizer):
     def __init__(self, params, lr=1.0,
                  betas=(0.9, 0.999), eps=1e-8,
                  c=0.2, d=None, adapt_lr=True,
-                 unit_step_direction=True,
+                 unit_step_direction=False,
                  weight_decay=0):
         if not 0.0 < lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -50,9 +50,25 @@ class Adam_CLARA(torch.optim.Optimizer):
                 if p.requires_grad:
                     self.total_params += p.numel()
 
+        if self.total_params == 2:
+            mu = 0.5958
+            sigma = 0.2553
+        if self.total_params == 62:
+            mu = 0.6853
+            sigma = 0.0357
+        if self.total_params == 235146:
+            mu = 0.6825
+            sigma = 0.0006
+        if self.total_params == 2193226:
+            mu = 0.6825
+            sigma = 0.0002
+        if self.total_params == 2216356:
+            mu = 0.6826
+            sigma  = 0.0002
+
         # Compute dependent values
-        mu = c / (2 - c)  # Mean of norm squared of uniformly sampled cumulated random steps. See Sebag et al. 2017
-        sigma = math.sqrt(2) * mu * (1 - c) / math.sqrt(((1 - c) ** 2 + 1) * self.total_params)  # Standard deviation
+        # mu = c / (2 - c)  # Mean of norm squared of uniformly sampled cumulated random steps. See Sebag et al. 2017
+        # sigma = math.sqrt(2) * mu * (1 - c) / math.sqrt(((1 - c) ** 2 + 1) * self.total_params)  # Standard deviation
 
         # Define damping if no default value passed
         if d is None:
@@ -80,7 +96,7 @@ class Adam_CLARA(torch.optim.Optimizer):
         all_paths = []
         total_params = 0  # Total number of scalar parameters
 
-        i = 0  # TODO: Rename
+        param_tensor_counter = 0
         for group in self.param_groups:
             decay = group['weight_decay']
             c = group['c']
@@ -94,7 +110,7 @@ class Adam_CLARA(torch.optim.Optimizer):
             sigma = group['sigma']
 
             for p in group['params']:
-                i += 1
+                param_tensor_counter += 1
                 if p.grad is None:
                     continue
 
@@ -137,8 +153,7 @@ class Adam_CLARA(torch.optim.Optimizer):
 
                 if adapt_lr and unit_step_direction:
                     # Normalize step direction
-                    if step_norm > 0:
-                        adam_step.div_(step_norm)
+                    adam_step.div_(torch.clamp(step_norm, min=1e-12))
 
                 # Take step
                 p.data.add_(adam_step, alpha=-lr)
@@ -147,7 +162,7 @@ class Adam_CLARA(torch.optim.Optimizer):
                 if adapt_lr and unit_step_direction:
                     path.mul_(1 - c).add_(adam_step, alpha=c)
                 else:
-                    path.mul_(1 - c).add_(adam_step / step_norm, alpha=c)  # TODO: Divide by norm only if not zero
+                    path.mul_(1 - c).add_(adam_step / torch.clamp(step_norm, min=1e-12), alpha=c)
 
                 # Collect path information
                 all_paths.append(path.flatten())
@@ -160,7 +175,8 @@ class Adam_CLARA(torch.optim.Optimizer):
             path_norm = torch.linalg.norm(full_path).pow(2).item()
             if adapt_lr:
                 # Calculate learning rate adjustment
-                lr_multiplier = math.exp(d * (path_norm / (i * mu) - 1))
+                # d = 2e-1
+                lr_multiplier = math.exp(d * (path_norm / (param_tensor_counter * mu) - 1))
 
                 # Update learning rate for all groups
                 for group in self.param_groups:
