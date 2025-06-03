@@ -5,11 +5,14 @@
 
 import os
 
+# Parallelize training loop (1 process per initial lr value)
+from multiprocessing import Process
+
 # Dataset & Model Loader
 from src.datasets import load_dataset
 
 # Benchmarking Utilities
-from utils.benchmark import run_optimizer_benchmark, plot_results_for_dataset
+from utils.benchmark import run_optimizer_benchmark, plot_results_for_dataset, run_for_lr
 from datetime import datetime
 
 
@@ -27,7 +30,7 @@ PLOT_RESULTS = 1        # Generate result plots
 # ---------------------------------------------------------*/
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
-# DATASETS = ["cifar100"]
+# DATASETS = ["cifar10"]
 DATASETS = ["mnist"]
 
 SUBSET = 100            # Percentage of dataset to use (use full)
@@ -46,7 +49,7 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 10
+EPOCHS = 20
 SEED = 42
 
 # 4. Optimizers to Benchmark
@@ -55,10 +58,12 @@ SEED = 42
 #               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed", "SGD_CLARA"]
 # OPTIMIZERS = ["SGD", "Adam", "AdamW", "SGD_CLARA",  "AdamW_CLARA"]
 # OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam", "AdamW"]
-OPTIMIZERS = ["SGD", "SGD_CLARA", "Adam", "Adam_CLARA"]  # ["Adam_CLARA", "SGD", "SGD_CLARA", "Adam", ]
+# OPTIMIZERS = ["SGD", "SGD_CLARA", "Adam", "Adam_CLARA"]
+OPTIMIZERS = ["Adam_CLARA", "Adam"]
+
 
 # Set a default learning rate for all optimizers
-DEFAULT_LR = 1e-6  # 0.001  # 1e-1  # 1e-6  # 1
+DEFAULT_LR = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
@@ -105,31 +110,40 @@ if __name__ == "__main__":
             if dataset not in NUM_CLASSES_DICT:
                 raise ValueError(f"Dataset {dataset} not found in NUM_CLASSES_DICT!")
 
-            # 🗂️ Create dataset-specific subfolder in timestamped folder
-            dataset_result_dir = os.path.join(save_path_with_time, dataset)
-            os.makedirs(dataset_result_dir, exist_ok=True)
+            batch_size = 8 if dataset in ["wikitext", "bookcorpus"] else BATCH_SIZE  # Much smaller for transformers
 
-            if dataset in ["wikitext", "bookcorpus"]:
-                batch_size = 8  # Much smaller for transformers
-            else:
-                batch_size = BATCH_SIZE
+            # Support both single value and list for DEFAULT_LR
+            learning_rates = DEFAULT_LR if isinstance(DEFAULT_LR, list) else [DEFAULT_LR]
 
-            for optimizer in OPTIMIZERS:
+            processes = []
 
-                run_optimizer_benchmark(
-                    dataset_name=dataset,
-                    optimizers=[optimizer],
-                    batch_size=batch_size,
-                    num_classes=NUM_CLASSES_DICT[dataset],
-                    epochs=EPOCHS,
-                    learning_rate=DEFAULT_LR,
-                    seed=SEED,
-                    save_dir=dataset_result_dir,  # ⚡ Save in timestamped/dataset folder
-                    subset=SUBSET,
+            for lr in learning_rates:
+                # Add learning rate to subfolder name
+                lr_str = f"lr{lr:.0e}" if lr < 1 else f"lr{lr:.2f}"
+
+                # 🗂️ Create dataset-specific subfolder in timestamped folder
+                dataset_result_dir = os.path.join(save_path_with_time, dataset, lr_str)
+                os.makedirs(dataset_result_dir, exist_ok=True)
+
+                p = Process(
+                    target=run_for_lr,
+                    args=(
+                        lr,
+                        dataset_result_dir,
+                        dataset,
+                        batch_size,
+                        NUM_CLASSES_DICT[dataset],
+                        OPTIMIZERS,
+                        EPOCHS,
+                        SEED,
+                        SUBSET
+                    )
                 )
+                p.start()
+                processes.append(p)
 
-            # ⚡ After all optimizers finished -> Plot all results for this dataset
-            plot_results_for_dataset(dataset_result_dir)
+            for p in processes:
+                p.join()
 
     print("\n--------------------------------")
     print("All tasks completed. 🌟")

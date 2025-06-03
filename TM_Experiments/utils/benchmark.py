@@ -137,6 +137,25 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
     elapsed_time = time.time() - start_time
     print(f"⏱️ Benchmark for {dataset_name.upper()} completed in {int(elapsed_time // 60)} min {elapsed_time % 60:.2f} sec")
 
+
+def run_for_lr(lr, result_dir, dataset, batch_size, num_classes, optimizers, epochs, seed, subset):
+    for optimizer in optimizers:
+        run_optimizer_benchmark(
+            dataset_name=dataset,
+            optimizers=[optimizer],
+            batch_size=batch_size,
+            num_classes=num_classes,
+            epochs=epochs,
+            learning_rate=lr,
+            seed=seed,
+            save_dir=result_dir,
+            subset=subset,
+        )
+
+    # ⚡ After all optimizers finished -> Plot all results for this dataset
+    plot_results_for_dataset(result_dir)
+
+
 # ---------------------------------------------------------*/
 # Plot results for a specific dataset folder
 # ---------------------------------------------------------*/
