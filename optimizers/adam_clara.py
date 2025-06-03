@@ -26,7 +26,7 @@ class Adam_CLARA(torch.optim.Optimizer):
     def __init__(self, params, lr=1.0,
                  betas=(0.9, 0.999), eps=1e-8,
                  c=0.2, d=None, adapt_lr=True,
-                 unit_step_direction=False,
+                 unit_step_direction=True,
                  weight_decay=0):
         if not 0.0 < lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -50,6 +50,8 @@ class Adam_CLARA(torch.optim.Optimizer):
                 if p.requires_grad:
                     self.total_params += p.numel()
 
+        # Compute reference distribution parameters for cumulative learning rate adaptation
+        # TODO: Handle mu and sigma values systematically
         if self.total_params == 2:
             mu = 0.5958
             sigma = 0.2553
@@ -66,13 +68,9 @@ class Adam_CLARA(torch.optim.Optimizer):
             mu = 0.6826
             sigma  = 0.0002
 
-        # Compute dependent values
-        # mu = c / (2 - c)  # Mean of norm squared of uniformly sampled cumulated random steps. See Sebag et al. 2017
-        # sigma = math.sqrt(2) * mu * (1 - c) / math.sqrt(((1 - c) ** 2 + 1) * self.total_params)  # Standard deviation
-
         # Define damping if no default value passed
         if d is None:
-            d = 2 * sigma
+            d = 2 * sigma  # TODO: Rather arbitrary
 
         # Save these to each param group
         for group in self.param_groups:
@@ -175,7 +173,6 @@ class Adam_CLARA(torch.optim.Optimizer):
             path_norm = torch.linalg.norm(full_path).pow(2).item()
             if adapt_lr:
                 # Calculate learning rate adjustment
-                # d = 2e-1
                 lr_multiplier = math.exp(d * (path_norm / (param_tensor_counter * mu) - 1))
 
                 # Update learning rate for all groups
