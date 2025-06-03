@@ -19,21 +19,27 @@ import time
 #---------------------------------------------------------*/
 # Parameters
 #---------------------------------------------------------*/
-OPTIMIZER_COLORS = {
-    "SGD": "blue",
-    "SGDMomentum": "cyan",
-    "Adam": "green",
-    "AdamW": "darkgreen",
-    "RMSProp": "brown",
-    "Adam_Clara_Global": "#FF6347",     # Tomato 
-    "Adam_Clara_Local": "#FF4500",      # OrangeRed
-    "Adam_Clara_Smoothed": "#DC143C",   # Crimson
-    "SGD_CLARA": "#1E90FF",          # DodgerBlue
-    "AdamW_CLARA": "#32CD32",       # LimeGreen
-}
+OPTIMIZER_NAMES = [
+    "SGD",
+    "SGDMomentum",
+    "Adam",
+    "AdamW",
+    "RMSProp",
+    "Adam_CLARA",
+    "Adam_CLARA_us",
+    "SGD_CLARA",
+    "SGD_CLARA_us"
+]
 
 # Fallback if a color is missing
 DEFAULT_COLOR = "gray"
+
+# Use a colormap (e.g., 'tab10', 'viridis', 'plasma')
+colormap = plt.get_cmap('tab10', len(OPTIMIZER_NAMES))
+
+OPTIMIZER_COLORS = dict()
+for i in range(len(OPTIMIZER_NAMES)):
+    OPTIMIZER_COLORS[OPTIMIZER_NAMES[i]] = colormap(i)
 
 def get_color(optimizer_name):
     return OPTIMIZER_COLORS.get(optimizer_name, DEFAULT_COLOR)
@@ -42,7 +48,7 @@ def get_color(optimizer_name):
 # Benchmarking
 #---------------------------------------------------------*/
 
-def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, seed, save_dir, subset=100):
+def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, damping, seed, save_dir, subset=100):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     start_time = time.time()
@@ -86,7 +92,7 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
 
         model.to(device)
 
-        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate=learning_rate)
+        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate=learning_rate, damping=damping)
 
         # ⚡ Pass is_language_model here!
         init_loss, init_accuracy = evaluate_model(
@@ -138,7 +144,7 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
     print(f"⏱️ Benchmark for {dataset_name.upper()} completed in {int(elapsed_time // 60)} min {elapsed_time % 60:.2f} sec")
 
 
-def run_for_lr(lr, result_dir, dataset, batch_size, num_classes, optimizers, epochs, seed, subset):
+def run_for_lr(lr, damping, result_dir, dataset, batch_size, num_classes, optimizers, epochs, seed, subset):
     for optimizer in optimizers:
         run_optimizer_benchmark(
             dataset_name=dataset,
@@ -147,19 +153,20 @@ def run_for_lr(lr, result_dir, dataset, batch_size, num_classes, optimizers, epo
             num_classes=num_classes,
             epochs=epochs,
             learning_rate=lr,
+            damping=damping,
             seed=seed,
             save_dir=result_dir,
             subset=subset,
         )
 
     # ⚡ After all optimizers finished -> Plot all results for this dataset
-    plot_results_for_dataset(result_dir)
+    plot_results_for_dataset(result_dir, dataset_name=dataset)
 
 
 # ---------------------------------------------------------*/
 # Plot results for a specific dataset folder
 # ---------------------------------------------------------*/
-def plot_results_for_dataset(dataset_result_dir):
+def plot_results_for_dataset(dataset_result_dir, dataset_name=None):
     
     result_files = [f for f in os.listdir(dataset_result_dir) if f.endswith(".pkl")]
     if not result_files:
@@ -175,8 +182,9 @@ def plot_results_for_dataset(dataset_result_dir):
     optimizers = list(results.keys())
 
     fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-    dataset_name = os.path.basename(dataset_result_dir)
-    fig.suptitle(f"Benchmark Results - {dataset_name.upper()}", fontsize=20)
+    if dataset_name is None:
+        dataset_name = os.path.basename(dataset_result_dir)
+    fig.suptitle(f"Benchmark Results - {dataset_name.upper()}", fontsize=20)  # TODO: Fix dataset name display. Search for dataset name in path name?
 
     # Final Test Accuracy
     ax = axs[0, 0]

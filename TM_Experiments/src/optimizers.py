@@ -11,7 +11,7 @@ from optimizers.sgd_clara import SGD_CLARA
 # -------------------- Optimizer Factory --------------------
 
 
-def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001):
+def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001, damping=1e-3):  # TODO: Add damping in SGD_CLARA and Adam_CLARA
     """Returns the requested optimizer initialized with model parameters."""
 
     optimizer_name = optimizer_name.lower()
@@ -27,9 +27,13 @@ def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001):
     elif optimizer_name == "rmsprop":
         optimizer = torch.optim.RMSprop(model_parameters, lr=learning_rate)
     elif optimizer_name == "sgd_clara":
-        return SGD_CLARA(model_parameters, lr=learning_rate)
+        return SGD_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
+    elif optimizer_name == "sgd_clara_us":  # CLARA with unit (normalized) steps
+        return SGD_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=True)
     elif optimizer_name == "adam_clara":
-        return Adam_CLARA(model_parameters, lr=learning_rate)
+        return Adam_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
+    elif optimizer_name == "adam_clara_us":
+        return Adam_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=True)
     else:
         raise ValueError(f"Optimizer {optimizer_name} is not supported.")
 
