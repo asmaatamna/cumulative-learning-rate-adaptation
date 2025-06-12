@@ -14,11 +14,12 @@ import pickle
 import matplotlib.pyplot as plt
 from tabulate import tabulate
 import time
+import wandb
 
 
-#---------------------------------------------------------*/
+# ---------------------------------------------------------*/
 # Parameters
-#---------------------------------------------------------*/
+# ---------------------------------------------------------*/
 OPTIMIZER_NAMES = [
     "SGD",
     "SGDMomentum",
@@ -41,16 +42,18 @@ OPTIMIZER_COLORS = dict()
 for i in range(len(OPTIMIZER_NAMES)):
     OPTIMIZER_COLORS[OPTIMIZER_NAMES[i]] = colormap(i)
 
+
 def get_color(optimizer_name):
     return OPTIMIZER_COLORS.get(optimizer_name, DEFAULT_COLOR)
 
-#---------------------------------------------------------*/
+# ---------------------------------------------------------*/
 # Benchmarking
-#---------------------------------------------------------*/
+# ---------------------------------------------------------*/
+
 
 def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, damping, seed, save_dir, subset=100):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    
+
     start_time = time.time()
 
     torch.manual_seed(seed)
@@ -81,10 +84,26 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
     # ----------------------------------------
     for optimizer_name in optimizers:
         # Choose correct model
-        
-        print(f"\n----- Training with optimizer: {optimizer_name} -----")    
+
+        # Initialize W&B for this optimizer
+        wandb.init(
+            project="optimizer-benchmarking",
+            name=f"{dataset_name}_{optimizer_name}_lr{learning_rate:.0e}",
+            config={
+                "optimizer": optimizer_name,
+                "dataset": dataset_name,
+                "learning_rate": learning_rate,
+                "batch_size": batch_size,
+                "epochs": epochs,
+                "damping": damping,
+                "seed": seed,
+                "subset": subset,
+            }
+        )
+
+        print(f"\n----- Training with optimizer: {optimizer_name} -----")
         print(f"\nRunning benchmark on {device.upper()} with dataset: {dataset_name.upper()}\n")
-        
+
         if is_language_model:
             model = load_model(dataset_name, num_classes=num_classes, input_dim=input_dim, model_type="tinytransformer")
         else:
@@ -96,9 +115,9 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
 
         # ⚡ Pass is_language_model here!
         init_loss, init_accuracy = evaluate_model(
-            model, 
-            test_loader, 
-            device=device, 
+            model,
+            test_loader,
+            device=device,
             is_language_model=is_language_model  # <-- HIER
         )
 
@@ -114,17 +133,36 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
             device=device
         )
 
+        # Log training metrics to W&B
+        for epoch, (loss, accuracy, lr) in enumerate(zip(t_losses, t_accuracies, t_lr)):
+            wandb.log({
+                "epoch": epoch + 1,
+                "optimizer": optimizer_name,
+                "dataset": dataset_name,
+                "learning_rate": lr,
+                "train_loss": loss,
+                "train_accuracy": accuracy,
+            })
+
         train_losses.extend(t_losses)
         train_accuracies.extend(t_accuracies)
         lr_history.extend(t_lr)
 
         # ⚡ Again for final evaluation
         test_loss, test_accuracy = evaluate_model(
-            model, 
-            test_loader, 
-            device=device, 
-            is_language_model=is_language_model 
+            model,
+            test_loader,
+            device=device,
+            is_language_model=is_language_model
         )
+
+        # Log final evaluation metrics to W&B
+        wandb.log({
+            "optimizer": optimizer_name,
+            "dataset": dataset_name,
+            "final_test_loss": test_loss,
+            "final_test_accuracy": test_accuracy,
+        })
 
         results = {
             "train_losses": train_losses,
@@ -140,8 +178,12 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
 
         print(f"✅ Saved benchmark for {optimizer_name.upper()}")
 
+        # Finish W&B run for this optimizer
+        wandb.finish()
+
     elapsed_time = time.time() - start_time
-    print(f"⏱️ Benchmark for {dataset_name.upper()} completed in {int(elapsed_time // 60)} min {elapsed_time % 60:.2f} sec")
+    print(
+        f"⏱️ Benchmark for {dataset_name.upper()} completed in {int(elapsed_time // 60)} min {elapsed_time % 60:.2f} sec")
 
 
 def run_for_lr(lr, damping, result_dir, dataset, batch_size, num_classes, optimizers, epochs, seed, subset):
@@ -167,7 +209,7 @@ def run_for_lr(lr, damping, result_dir, dataset, batch_size, num_classes, optimi
 # Plot results for a specific dataset folder
 # ---------------------------------------------------------*/
 def plot_results_for_dataset(dataset_result_dir, dataset_name=None):
-    
+
     result_files = [f for f in os.listdir(dataset_result_dir) if f.endswith(".pkl")]
     if not result_files:
         print(f"⚠️ No results to plot in {dataset_result_dir}")
@@ -184,7 +226,8 @@ def plot_results_for_dataset(dataset_result_dir, dataset_name=None):
     fig, axs = plt.subplots(2, 2, figsize=(16, 12))
     if dataset_name is None:
         dataset_name = os.path.basename(dataset_result_dir)
-    fig.suptitle(f"Benchmark Results - {dataset_name.upper()}", fontsize=20)  # TODO: Fix dataset name display. Search for dataset name in path name?
+    # TODO: Fix dataset name display. Search for dataset name in path name?
+    fig.suptitle(f"Benchmark Results - {dataset_name.upper()}", fontsize=20)
 
     # Final Test Accuracy
     ax = axs[0, 0]
@@ -211,7 +254,7 @@ def plot_results_for_dataset(dataset_result_dir, dataset_name=None):
     ax.legend()
     ax.grid()
     ax.set_xticks(range(len(results[optimizers[0]]["train_accuracies"])))  # Nur ganzzahlige Labels
-    
+
     # Training Loss
     ax = axs[1, 0]
     for opt_name in optimizers:
@@ -222,7 +265,7 @@ def plot_results_for_dataset(dataset_result_dir, dataset_name=None):
     ax.legend()
     ax.grid()
     ax.set_xticks(range(len(results[optimizers[0]]["train_losses"])))  # Nur ganzzahlige Labels
-    
+
     # Learning Rate
     ax = axs[1, 1]
     for opt_name in optimizers:
@@ -248,6 +291,6 @@ def plot_results_for_dataset(dataset_result_dir, dataset_name=None):
     print(f"✅ Saved benchmark plot to {save_path_png}")
 
 
-#-------------------------Notes-----------------------------------------------*\
-# 
-#-----------------------------------------------------------------------------*\
+# -------------------------Notes-----------------------------------------------*\
+#
+# -----------------------------------------------------------------------------*\

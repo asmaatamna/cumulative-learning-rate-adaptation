@@ -16,6 +16,8 @@ from src.datasets import load_dataset
 from utils.benchmark import run_for_lr
 from datetime import datetime
 
+import wandb
+
 
 # ---------------------------------------------------------*/
 # Parameters
@@ -93,6 +95,7 @@ def download_datasets(datasets, batch_size):
 
 
 if __name__ == "__main__":
+
     # Create parser
     parser = argparse.ArgumentParser(description="Run optimizer benchmark.")
 
@@ -110,6 +113,23 @@ if __name__ == "__main__":
     DAMPING = args.damping  # Damping parameter d in CLARA. TODO: Try values: 1e-5, 1e-4, 1e-3, 1e-2, 1e-1
     print("Damping factor:", DAMPING)
 
+
+    # Initialize W&B
+    wandb.init(
+        project="cumulative-learning-rate-adaptation",  # Replace with your W&B project name
+        config={
+            "datasets": DATASETS,
+            "batch_size": BATCH_SIZE,
+            "epochs": EPOCHS,
+            "optimizers": OPTIMIZERS,
+            "default_lr": DEFAULT_LR,
+            "damping": args.damping,
+            "subset": SUBSET,
+        }
+    )
+    config = wandb.config  # Access W&B config if needed
+
+    
     if DOWNLOAD_DATASETS:
         download_datasets(DATASETS, batch_size=BATCH_SIZE)
 
