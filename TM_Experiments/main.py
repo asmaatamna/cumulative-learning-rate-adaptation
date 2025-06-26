@@ -29,10 +29,13 @@ DOWNLOAD_DATASETS = 0   # Download and prepare datasets
 RUN_BENCHMARK = 1       # Run optimizer benchmark
 PLOT_RESULTS = 1        # Generate result plots
 
+EXPERIMENT_NAME = "Experiment 3"  # Name of the experiment
+
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
-DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
+# DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
+DATASETS = ["mnist"]
 # DATASETS = ["cifar10"]
 # DATASETS = ["mnist"]
 
@@ -52,7 +55,7 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 20
+EPOCHS = 5
 SEEDS = [42]
 
 # 4. Optimizers to Benchmark
@@ -112,23 +115,6 @@ if __name__ == "__main__":
 
     DAMPING = args.damping  # Damping parameter d in CLARA. TODO: Try values: 1e-5, 1e-4, 1e-3, 1e-2, 1e-1
     print("Damping factor:", DAMPING)
-
-
-    # Initialize W&B
-    wandb.init(
-        project="cumulative-learning-rate-adaptation",  # Replace with your W&B project name
-        config={
-            "datasets": DATASETS,
-            "batch_size": BATCH_SIZE,
-            "epochs": EPOCHS,
-            "optimizers": OPTIMIZERS,
-            "default_lr": DEFAULT_LR,
-            "damping": args.damping,
-            "subset": SUBSET,
-        }
-    )
-    config = wandb.config  # Access W&B config if needed
-
     
     if DOWNLOAD_DATASETS:
         download_datasets(DATASETS, batch_size=BATCH_SIZE)
@@ -177,7 +163,8 @@ if __name__ == "__main__":
                             OPTIMIZERS,
                             EPOCHS,
                             seed,
-                            SUBSET
+                            SUBSET,
+                            EXPERIMENT_NAME
                         )
                     )
                     p.start()
@@ -186,6 +173,7 @@ if __name__ == "__main__":
                 for p in processes:
                     p.join()
 
+        
     print("\n--------------------------------")
     print("All tasks completed. 🌟")
     print("--------------------------------")
