@@ -46,7 +46,7 @@ OPTIMIZER_NAMES = [
     "SGDMomentum",
     "Adam",
     "AdamW",
-    "RMSProp",
+    "RMSProp",  # TODO: Add D-Adaptation and lr_scheduler
     "Adam_CLARA",
     "Adam_CLARA_us",
     "SGD_CLARA",
@@ -73,7 +73,7 @@ def get_color(optimizer_name):
 
 
 def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, damping, seed, 
-                            save_dir, subset=100, experiment_name=None):
+                            save_dir, subset=100, experiment_name=None):  # TODO: Define damping dictionary {optimizer -> {dataset -> {lr -> damping}}}
 
     logger = logging.getLogger()
 
@@ -111,17 +111,16 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
 
         logger.info(f"Starte Optimizer {optimizer_name} — LR={learning_rate}, Seed={seed}")
 
-        # 1) initialize W&B for exactly this (seed, damping, lr, optimizer) combo
+        # 1) initialize W&B for exactly this (seed, lr, optimizer) combo
         wandb.init(
             entity="cumulative-learning-rate-adaptation",  # <--- HIER festlegen
             project=experiment_name,
             group="optimizer-benchmark",              # optional: groups them under one experiment
-            name=f"{dataset_name}_{optimizer_name}_lr{learning_rate:.0e}_d{damping}_s{seed}",
+            name=f"{dataset_name}_{optimizer_name}_lr{learning_rate:.0e}_s{seed}",
             config={
                 "dataset": dataset_name,
                 "optimizer": optimizer_name,
                 "learning_rate": learning_rate,
-                "damping": damping,
                 "seed": seed,
                 "batch_size": batch_size,
                 "epochs": epochs,
@@ -140,7 +139,8 @@ def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, e
 
         model.to(device)
 
-        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate=learning_rate, damping=damping)
+        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate=learning_rate,
+                                  damping=damping[optimizer_name][dataset_name][str(learning_rate)])
 
         # ⚡ Pass is_language_model here!
         init_loss, init_accuracy = evaluate_model(

@@ -29,13 +29,13 @@ DOWNLOAD_DATASETS = 0   # Download and prepare datasets
 RUN_BENCHMARK = 1       # Run optimizer benchmark
 PLOT_RESULTS = 1        # Generate result plots
 
-EXPERIMENT_NAME = "Experiment 3"  # Name of the experiment
+EXPERIMENT_NAME = "Experiment 5"  # Name of the experiment
 
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
 # DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
-DATASETS = ["mnist"]
+DATASETS = ["mnist", "fmnist"]
 # DATASETS = ["cifar10"]
 # DATASETS = ["mnist"]
 
@@ -55,8 +55,8 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 5
-SEEDS = [42]
+EPOCHS = 5  # TODO: Per dataset
+SEEDS = [0, 1, 2, 3, 4]  # [42]
 
 # 4. Optimizers to Benchmark
 # ---------------------------------------------------------*/
@@ -65,11 +65,23 @@ SEEDS = [42]
 # OPTIMIZERS = ["SGD", "Adam", "AdamW", "SGD_CLARA",  "AdamW_CLARA"]
 # OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam", "AdamW"]
 # OPTIMIZERS = ["SGD", "SGD_CLARA", "Adam", "Adam_CLARA"]
-OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam"]  # TODO: Add D-Adaptation
+OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam"]  # TODO: Add D-Adaptation and lr scheduler
 
 
 # Set a default learning rate for all optimizers
 DEFAULT_LR = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
+
+# Set default damping values for CLARA algorithms (based on tuning done in a separate procedure)
+DAMPING = {
+    optimizer: {
+        dataset: {
+            str(lr): 1e-3  # TODO: Use tuned values
+            for lr in DEFAULT_LR
+        }
+        for dataset in DATASETS
+    }
+    for optimizer in OPTIMIZERS
+}
 
 # 5. Save Paths
 # ---------------------------------------------------------*/
@@ -98,23 +110,7 @@ def download_datasets(datasets, batch_size):
 
 
 if __name__ == "__main__":
-
-    # Create parser
-    parser = argparse.ArgumentParser(description="Run optimizer benchmark.")
-
-    # Add damping argument
-    parser.add_argument(
-        "-d", "--damping",
-        type=float,
-        default=1e-3,
-        help="Damping factor (default: 1e-3)"
-    )
-
-    # Parse arguments
-    args = parser.parse_args()
-
-    DAMPING = args.damping  # Damping parameter d in CLARA. TODO: Try values: 1e-5, 1e-4, 1e-3, 1e-2, 1e-1
-    print("Damping factor:", DAMPING)
+    # Damping parameter d in CLARA. TODO: Try values: 1e-5, 1e-4, 1e-3, 1e-2, 1e-1
     
     if DOWNLOAD_DATASETS:
         download_datasets(DATASETS, batch_size=BATCH_SIZE)
@@ -129,7 +125,8 @@ if __name__ == "__main__":
 
             # 📅 Build timestamped result directory name
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-            run_folder = f"{timestamp}_{EPOCHS}_{seed}_{DAMPING:.0e}_DateTimeEpochSeedDamping"  # TODO: Add damping and seed
+            # run_folder = f"{timestamp}_{EPOCHS}_{seed}_{DAMPING:.0e}_DateTimeEpochSeedDamping"  # TODO: Use only in damping experiments
+            run_folder = f"{timestamp}_{EPOCHS}_{seed}_DateTimeEpochSeed"
             save_path_with_time = os.path.join(SAVE_DIR, run_folder)
 
             for dataset in DATASETS:
