@@ -43,10 +43,11 @@ logging.basicConfig(
 # ---------------------------------------------------------*/
 OPTIMIZER_NAMES = [
     "SGD",
-    "SGDMomentum",
+    # "SGDMomentum",
     "Adam",
-    "AdamW",
-    "RMSProp",  # TODO: Add D-Adaptation and lr_scheduler
+    # "AdamW",
+    # "RMSProp",
+    "D-Adaptation",
     "Adam_CLARA",
     "Adam_CLARA_us",
     "SGD_CLARA",
@@ -73,7 +74,7 @@ def get_color(optimizer_name):
 
 
 def run_optimizer_benchmark(dataset_name, optimizers, batch_size, num_classes, epochs, learning_rate, damping, seed, 
-                            save_dir, subset=100, experiment_name=None):  # TODO: Define damping dictionary {optimizer -> {dataset -> {lr -> damping}}}
+                            save_dir, subset=100, experiment_name=None):
 
     logger = logging.getLogger()
 

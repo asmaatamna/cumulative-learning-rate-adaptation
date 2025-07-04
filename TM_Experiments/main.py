@@ -59,13 +59,7 @@ EPOCHS = 5  # TODO: Per dataset
 SEEDS = [0, 1, 2, 3, 4]  # [42]
 
 # 4. Optimizers to Benchmark
-# ---------------------------------------------------------*/
-# OPTIMIZERS = ["SGD", "SGDMomentum", "Adam", "AdamW", "RMSProp",
-#               "Adam_Clara_Global", "Adam_Clara_Local", "Adam_Clara_Smoothed", "SGD_CLARA"]
-# OPTIMIZERS = ["SGD", "Adam", "AdamW", "SGD_CLARA",  "AdamW_CLARA"]
-# OPTIMIZERS = ["SGD_CLARA", "Adam_CLARA", "Adam", "AdamW"]
-# OPTIMIZERS = ["SGD", "SGD_CLARA", "Adam", "Adam_CLARA"]
-OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam"]  # TODO: Add D-Adaptation and lr scheduler
+OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam", "D-Adaptation"]  # TODO: Add lr scheduler
 
 
 # Set a default learning rate for all optimizers

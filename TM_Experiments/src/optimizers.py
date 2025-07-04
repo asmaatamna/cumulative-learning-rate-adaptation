@@ -4,6 +4,7 @@
 # ---------------------------------------------------------*/
 
 import torch
+import dadaptation
 from optimizers.adam_clara import Adam_CLARA
 from optimizers.sgd_clara import SGD_CLARA
 
@@ -26,6 +27,8 @@ def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001, damping
         optimizer = torch.optim.AdamW(model_parameters, lr=learning_rate)
     elif optimizer_name == "rmsprop":
         optimizer = torch.optim.RMSprop(model_parameters, lr=learning_rate)
+    elif optimizer_name == "d-adaptation":
+        optimizer = dadaptation.DAdaptAdam(model_parameters, lr=learning_rate)
     elif optimizer_name == "sgd_clara":
         return SGD_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
     elif optimizer_name == "sgd_clara_us":  # CLARA with unit (normalized) steps
