@@ -55,9 +55,18 @@ class Adam_CLARA(torch.optim.Optimizer):
         if self.total_params == 2:
             mu = 0.5958
             sigma = 0.2553
+        if self.total_params == 15:
+            mu = 0.6729
+            sigma = 0.0814
+        if self.total_params == 42:
+            mu = 0.6770
+            sigma = 0.0489
         if self.total_params == 62:
             mu = 0.6853
             sigma = 0.0357
+        if self.total_params == 650:
+            mu = 0.6827
+            sigma = 0.0119
         if self.total_params == 235146:
             mu = 0.6825
             sigma = 0.0006

@@ -28,7 +28,7 @@ def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001, damping
     elif optimizer_name == "rmsprop":
         optimizer = torch.optim.RMSprop(model_parameters, lr=learning_rate)
     elif optimizer_name == "d-adaptation":
-        optimizer = dadaptation.DAdaptAdam(model_parameters, lr=learning_rate)
+        optimizer = dadaptation.DAdaptAdam(model_parameters, d0=learning_rate)  # To emulate initial lr value comparable to the rest of optimizers'
     elif optimizer_name == "sgd_clara":
         return SGD_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
     elif optimizer_name == "sgd_clara_us":  # CLARA with unit (normalized) steps

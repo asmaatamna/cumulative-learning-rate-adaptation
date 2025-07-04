@@ -29,15 +29,12 @@ DOWNLOAD_DATASETS = 0   # Download and prepare datasets
 RUN_BENCHMARK = 1       # Run optimizer benchmark
 PLOT_RESULTS = 1        # Generate result plots
 
-EXPERIMENT_NAME = "Experiment 5"  # Name of the experiment
+EXPERIMENT_NAME = "Experiment 7"  # Name of the experiment
 
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
-# DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer", "wikitext"]  # All datasets you prepared
-# DATASETS = ["mnist", "fmnist", "cifar10", "cifar100", "breast_cancer"]
-DATASETS = ["mnist", "fmnist"]
-# DATASETS = ["cifar10"]
-# DATASETS = ["mnist"]
+# DATASETS = ["breast_cancer", "iris", "wine", "digits", "mnist", "fmnist", "cifar10", "cifar100", "wikitext"]  # All datasets you prepared
+DATASETS = ["breast_cancer", "iris", "wine", "digits", "mnist", "fmnist", "cifar10", "cifar100"]
 
 SUBSET = 100            # Percentage of dataset to use (use full)
 
@@ -50,12 +47,15 @@ NUM_CLASSES_DICT = {
     "cifar10": 10,
     "cifar100": 100,
     "breast_cancer": 2,
+    "iris": 3,
+    "wine": 3,
+    "digits": 10,
     "wikitext": 50257  # For distilgpt2 tokenizer (vocab size)
 }
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 5  # TODO: Per dataset
+EPOCHS = 100  # TODO: Per dataset
 SEEDS = [0, 1, 2, 3, 4]  # [42]
 
 # 4. Optimizers to Benchmark
