@@ -29,7 +29,7 @@ DOWNLOAD_DATASETS = 0   # Download and prepare datasets
 RUN_BENCHMARK = 1       # Run optimizer benchmark
 PLOT_RESULTS = 1        # Generate result plots
 
-EXPERIMENT_NAME = "Experiment 7"  # Name of the experiment
+EXPERIMENT_NAME = "Experiment 11"  # Name of the experiment
 
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
@@ -59,17 +59,19 @@ EPOCHS = 100  # TODO: Per dataset
 SEEDS = [0, 1, 2, 3, 4]  # [42]
 
 # 4. Optimizers to Benchmark
-OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam", "D-Adaptation"]  # TODO: Add lr scheduler
+# OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam", "D-Adaptation"]  # TODO: Add lr scheduler
+OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "Adam_CLARA", "Adam_CLARA_us"]
 
 
 # Set a default learning rate for all optimizers
 DEFAULT_LR = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
 
 # Set default damping values for CLARA algorithms (based on tuning done in a separate procedure)
+d = 1e-1
 DAMPING = {
     optimizer: {
         dataset: {
-            str(lr): 1e-3  # TODO: Use tuned values
+            str(lr): d  # TODO: Use tuned values
             for lr in DEFAULT_LR
         }
         for dataset in DATASETS
@@ -119,8 +121,8 @@ if __name__ == "__main__":
 
             # 📅 Build timestamped result directory name
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-            # run_folder = f"{timestamp}_{EPOCHS}_{seed}_{DAMPING:.0e}_DateTimeEpochSeedDamping"  # TODO: Use only in damping experiments
-            run_folder = f"{timestamp}_{EPOCHS}_{seed}_DateTimeEpochSeed"
+            run_folder = f"{timestamp}_{EPOCHS}_{seed}_{d:.0e}_DateTimeEpochSeedDamping"  # TODO: Use only in damping experiments
+            # run_folder = f"{timestamp}_{EPOCHS}_{seed}_DateTimeEpochSeed"
             save_path_with_time = os.path.join(SAVE_DIR, run_folder)
 
             for dataset in DATASETS:
