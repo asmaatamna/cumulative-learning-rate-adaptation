@@ -5,12 +5,19 @@
 
 import warnings
 import os
+import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from plotly.colors import qualitative
 import plotly.graph_objects as go
 import numpy as np
 import torch
 import plotly.express as px
+import plotly.io as pio
+import seaborn as sns
+from matplotlib.colors import Normalize
+
+pio.kaleido.scope.default_format = "pdf"
+plt.rcParams['figure.dpi'] = 100  # Set DPI to 150 (default is usually 72)
 
 #---------------------------------------------------------*/
 # Mathematical Functions
@@ -227,7 +234,7 @@ def optimize_and_plot(
                 x_torch[:] = torch.clamp(x_torch, bounds[0], bounds[1])
 
             if not torch.isfinite(x_torch).all() or (x_torch.abs() > 1e3).any():
-                print(f"⚠️ Divergenz in Optimierer '{name}' bei Schritt {step_idx}: {x_torch.detach().cpu().numpy()}")
+                print(f"⚠️ Divergence in optimizer '{name}' at step {step_idx}: {x_torch.detach().cpu().numpy()}")
                 break
 
             path.append(x_torch.detach().cpu().clone().numpy())
@@ -315,20 +322,17 @@ def optimize_and_plot(
             z=Z_path,
             mode='markers',
             marker=dict(size=4, color=color_map[name], opacity=1.0),
-            name=f'{name} Pfad'
+            name=f'{name} Path'
         ))
 
 
     fig.update_layout(
-        title=f"Optimierungspfade auf Zielfunktion: {func_name}",
-        autosize=True,
-        scene=dict(
-            xaxis_title="x",
-            yaxis_title="y",
-            zaxis_title="f(x, y)",
-            zaxis=dict(range=[zmin, zmax]),
-            camera=dict(eye=dict(x=1.5, y=1.5, z=1.0))
-        ),
+        title=f"Optimization paths on objective function: {func_name}",
+        autosize=False,  # Disable automatic resizing
+        width=800,       # Set the desired width
+        height=600,      # Set the desired height
+        xaxis_title="x",
+        yaxis_title="y",
         margin=dict(l=0, r=0, t=50, b=0),
         font=dict(family="Arial", size=14),
         legend=dict(x=0.8, y=0.95)
@@ -343,7 +347,6 @@ def optimize_and_plot(
 # 2D Plotting
 #---------------------------------------------------------*/
 
-
 def optimize_and_plot_2d(
     func_np, func_torch, global_optimum,
     optimizers,
@@ -356,12 +359,11 @@ def optimize_and_plot_2d(
     func_name=None,
     show = False
 ):
-    # Surface grid
-    x_vals = y_vals = np.linspace(bounds[0], bounds[1], 200)
+    # Grid for objective function
+    x_vals = y_vals = np.linspace(bounds[0], bounds[1], 300)
     X, Y = np.meshgrid(x_vals, y_vals)
     Z = np.zeros_like(X)
 
-    # Compute surface
     for i in range(X.shape[0]):
         for j in range(X.shape[1]):
             try:
@@ -370,14 +372,15 @@ def optimize_and_plot_2d(
             except Exception:
                 Z[i, j] = np.nan
 
+    # Color Normalization
     zmin, zmax = np.nanmin(Z), np.nanmax(Z)
+    norm = Normalize(vmin=zmin, vmax=zmax)
 
-    # Optimization paths
+    # Colors
+    color_palette = sns.color_palette("Set1", n_colors=len(optimizers))
     paths = {}
-    color_cycle = qualitative.Plotly
-    color_list = list(color_cycle)
-    color_map = {}
 
+    # Optimizer Paths
     for idx, (name, OptimizerClass) in enumerate(optimizers.items()):
         lr = lr_dict.get(name, 0.01) if lr_dict else 0.01
         steps = steps_dict.get(name, 50) if steps_dict else 50
@@ -396,86 +399,56 @@ def optimize_and_plot_2d(
                 torch.nn.utils.clip_grad_norm_([x_torch], max_norm=gradient_clip)
 
             optimizer.step()
-
             with torch.no_grad():
                 x_torch[:] = torch.clamp(x_torch, bounds[0], bounds[1])
 
-            if not torch.isfinite(x_torch).all() or (x_torch.abs() > 1e3).any():
-                print(f"⚠️ Divergenz in Optimierer '{name}' bei Schritt {step_idx}: {x_torch.detach().cpu().numpy()}")
+            if not torch.isfinite(x_torch).all():
+                print(f"⚠️ Divergenz bei {name}, Schritt {step_idx}")
                 break
 
             path.append(x_torch.detach().cpu().clone().numpy())
 
         paths[name] = np.array(path)
-        color_map[name] = color_list[idx % len(color_list)]
 
-    # Plotly 2D Contour Figure
-    fig = go.Figure()
+    # ---- Plotting ----
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    fig.add_trace(go.Contour(
-        x=x_vals,
-        y=y_vals,
-        z=Z,
-        colorscale='Viridis',
-        contours=dict(showlabels=True),
-        colorbar=dict(title="f(x, y)"),
-        line_smoothing=0.5,
-        zmin=zmin,
-        zmax=zmax
-    ))
+    # Target Function
+    contour = ax.contourf(X, Y, Z, levels=20, cmap='viridis', norm=norm)
+    cbar = fig.colorbar(contour, ax=ax)
+    cbar.set_label(r"$f(x, y)$", fontsize=14)
 
-    for name, path in paths.items():
-        n_steps = len(path)
-        min_width, max_width = 1, 3
-        min_opacity, max_opacity = 0.5, 1.0
+    # Optimizer Paths
+    for idx, (name, path) in enumerate(paths.items()):
+        color = color_palette[idx]
+        ax.plot(path[:, 0], path[:, 1], '-', label=name, color=color, linewidth=2)
+        ax.scatter(path[::5, 0], path[::5, 1], s=20, color=color, edgecolors='k', zorder=3)
 
-        # Zeichne Pfad als sequenzielle Liniensegmente mit Verlauf
-        for i in range(1, n_steps):
-            width = min_width + (max_width - min_width) * (i / n_steps)
-            opacity = min_opacity + (max_opacity - min_opacity) * (i / n_steps)
+    # Global Optimum
+    ax.scatter(global_optimum[0], global_optimum[1], s=80, c='black', marker='*', label='Global Optimum', zorder=4)
 
-            fig.add_trace(go.Scatter(
-                x=[path[i - 1][0], path[i][0]],
-                y=[path[i - 1][1], path[i][1]],
-                mode='lines',
-                line=dict(color=color_map[name], width=width),
-                opacity=opacity,
-                showlegend=False
-            ))
+    # Labels and Title
+    ax.set_xlabel(r"$x$", fontsize=14)
+    ax.set_ylabel(r"$y$", fontsize=14)
+    ax.tick_params(labelsize=12)
+    ax.set_title(f"Optimization Trajectories on {func_name} Objective", fontsize=16)
 
-        # Punkte mit voller Deckkraft am Pfad
-        fig.add_trace(go.Scatter(
-            x=path[:, 0], y=path[:, 1],
-            mode='markers',
-            marker=dict(size=5, color=color_map[name], opacity=1.0),
-            name=f'{name} Pfad'
-        ))
+    # Legend
+    ax.legend(loc='upper right', fontsize=12, frameon=True)
 
-    # Globales Optimum
-    fig.add_trace(go.Scatter(
-        x=[global_optimum[0]],
-        y=[global_optimum[1]],
-        mode='markers+text',
-        marker=dict(size=10, color='purple'),
-        text=["Globales Optimum"],
-        textposition='top center',
-        name='Globales Optimum'
-    ))
+    # Axis Limits
+    ax.grid(True, linestyle='--', alpha=0.3)
 
-    fig.update_layout(
-        title=f"Optimierungspfade auf Zielfunktion: {func_name}",
-        autosize=True,
-        xaxis_title="x",
-        yaxis_title="y",
-        margin=dict(l=0, r=0, t=50, b=0),
-        font=dict(family="Arial", size=14),
-        legend=dict(x=0.8, y=0.95)
-    )
+    # Save
+    output_path = f"./results/{func_name}_optimization_paths_2d_matplotlib.pdf"
+    fig.tight_layout()
+    fig.savefig(output_path, format='pdf')
+    print(f"✅ Plot saved as PDF: {output_path}")
 
-    if show == True:
-        fig.show()
-    show_plot_and_save(fig, permanent_path="./results/", filename=f"{func_name}_optimization_paths_2d.html")
-
+    if show:
+        plt.show()
+    else:
+        plt.close()
 
 #---------------------------------------------------------*/
 # Animated Plot
@@ -632,7 +605,7 @@ def optimize_and_animate(
 
     # Animation settings
     fig.update_layout(
-        title=f"Optimierung (Animation): {func_name}",
+        title=f"Optimization (Animation): {func_name}",
         scene=dict(
             xaxis_title="x", yaxis_title="y", zaxis_title="f(x,y)",
             zaxis=dict(range=[zmin, zmax]),
