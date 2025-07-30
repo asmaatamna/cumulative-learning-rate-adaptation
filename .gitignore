@@ -7,3 +7,4 @@ TM_Experiments/results/benchmark_mnist.pkl
 .vscode/settings.json
 /TM_Experiments/wandb
 /TM_Experiments/mocks
+/TM_Experiments/docs

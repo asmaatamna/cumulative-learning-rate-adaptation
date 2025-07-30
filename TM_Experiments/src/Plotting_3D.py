@@ -431,7 +431,7 @@ def optimize_and_plot_2d(
     ax.set_xlabel(r"$x$", fontsize=14)
     ax.set_ylabel(r"$y$", fontsize=14)
     ax.tick_params(labelsize=12)
-    ax.set_title(f"Optimization Trajectories on {func_name} Objective", fontsize=16)
+    # ax.set_title(f"Optimization Trajectories on {func_name} Objective", fontsize=16)
 
     # Legend
     ax.legend(loc='upper right', fontsize=12, frameon=True)
