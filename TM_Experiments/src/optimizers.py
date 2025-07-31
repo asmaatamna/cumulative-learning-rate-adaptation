@@ -5,8 +5,8 @@
 
 import torch
 import dadaptation
-from optimizers.adam_clara import Adam_CLARA
-from optimizers.sgd_clara import SGD_CLARA
+from optimizers.adam_clara import Adam_Clara
+from optimizers.sgd_clara import SGD_Clara
 
 
 # -------------------- Optimizer Factory --------------------
@@ -30,13 +30,13 @@ def get_optimizer(optimizer_name, model_parameters, learning_rate=0.001, damping
     elif optimizer_name == "d-adaptation":
         optimizer = dadaptation.DAdaptAdam(model_parameters, d0=learning_rate)  # To emulate initial lr value comparable to the rest of optimizers'
     elif optimizer_name == "sgd_clara":
-        return SGD_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
+        return SGD_Clara(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
     elif optimizer_name == "sgd_clara_us":  # CLARA with unit (normalized) steps
-        return SGD_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=True)
+        return SGD_Clara(model_parameters, d=damping, lr=learning_rate, unit_step_direction=True)
     elif optimizer_name == "adam_clara":
-        return Adam_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
+        return Adam_Clara(model_parameters, d=damping, lr=learning_rate, unit_step_direction=False)
     elif optimizer_name == "adam_clara_us":
-        return Adam_CLARA(model_parameters, d=damping, lr=learning_rate, unit_step_direction=True)
+        return Adam_Clara(model_parameters, d=damping, lr=learning_rate, unit_step_direction=True)
     else:
         raise ValueError(f"Optimizer {optimizer_name} is not supported.")
 

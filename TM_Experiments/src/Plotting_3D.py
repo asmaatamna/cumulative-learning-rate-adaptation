@@ -16,7 +16,7 @@ import plotly.io as pio
 import seaborn as sns
 from matplotlib.colors import Normalize
 
-pio.kaleido.scope.default_format = "pdf"
+# pio.kaleido.scope.default_format = "pdf"
 plt.rcParams['figure.dpi'] = 100  # Set DPI to 150 (default is usually 72)
 
 #---------------------------------------------------------*/
@@ -357,7 +357,7 @@ def optimize_and_plot_2d(
     gradient_clip=None,
     device='cpu',
     func_name=None,
-    show = False
+    show=False
 ):
     # Grid for objective function
     x_vals = y_vals = np.linspace(bounds[0], bounds[1], 300)
@@ -403,7 +403,7 @@ def optimize_and_plot_2d(
                 x_torch[:] = torch.clamp(x_torch, bounds[0], bounds[1])
 
             if not torch.isfinite(x_torch).all():
-                print(f"⚠️ Divergenz bei {name}, Schritt {step_idx}")
+                print(f"⚠️ Divergence at {name}, step {step_idx}")
                 break
 
             path.append(x_torch.detach().cpu().clone().numpy())
@@ -418,25 +418,38 @@ def optimize_and_plot_2d(
     cbar = fig.colorbar(contour, ax=ax)
     cbar.set_label(r"$f(x, y)$", fontsize=14)
 
-    # Optimizer Paths
+    # Optimizer Paths and distance computation
+    legend_entries = []
     for idx, (name, path) in enumerate(paths.items()):
         color = color_palette[idx]
-        ax.plot(path[:, 0], path[:, 1], '-', label=name, color=color, linewidth=2)
+        ax.plot(path[:, 0], path[:, 1], '-', color=color, linewidth=2)
+
+        # Intermediate markers
         ax.scatter(path[::5, 0], path[::5, 1], s=20, color=color, edgecolors='k', zorder=3)
 
-    # Global Optimum
-    ax.scatter(global_optimum[0], global_optimum[1], s=80, c='black', marker='*', label='Global Optimum', zorder=4)
+        # Last point as black-rimmed cross
+        final_point = path[-1]
+        ax.scatter(final_point[0], final_point[1], s=120, facecolors=color, edgecolors='black', linewidths=2.5, zorder=6, marker='s')
 
-    # Labels and Title
+        # Compute distance and prepare legend label
+        dist = np.linalg.norm(final_point - np.array(global_optimum))
+        legend_entries.append((f"{name} (dist={dist:.1f})", color))
+        print(f"Optimizer {name}: Final distance to optimum = {dist:.1f}")
+
+    # Global Optimum: white star with black edge
+    ax.scatter(global_optimum[0], global_optimum[1], s=350, facecolors='white',
+               edgecolors='black', marker='*', label='Global Optimum', zorder=6, linewidths=1.5)
+
+    # Build legend with distances
+    handles = [plt.Line2D([], [], color=c, lw=2, label=l) for l, c in legend_entries]
+    handles.append(plt.Line2D([], [], marker='*', color='w', markerfacecolor='white',
+                              markeredgecolor='black', lw=0, label='Global Optimum'))
+    ax.legend(handles=handles, loc='upper right', fontsize=12, frameon=True)
+
+    # Labels
     ax.set_xlabel(r"$x$", fontsize=14)
     ax.set_ylabel(r"$y$", fontsize=14)
     ax.tick_params(labelsize=12)
-    # ax.set_title(f"Optimization Trajectories on {func_name} Objective", fontsize=16)
-
-    # Legend
-    ax.legend(loc='upper right', fontsize=12, frameon=True)
-
-    # Axis Limits
     ax.grid(True, linestyle='--', alpha=0.3)
 
     # Save
@@ -450,6 +463,9 @@ def optimize_and_plot_2d(
     else:
         plt.close()
 
+        
+        
+        
 #---------------------------------------------------------*/
 # Animated Plot
 #---------------------------------------------------------*/

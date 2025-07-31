@@ -3,7 +3,7 @@ import copy
 import math
 import torch
 
-class SGD_CLARA(Optimizer):
+class SGD_Clara(Optimizer):
     r"""Implements vanilla Gradient Descent with Cumulative Learning Rate Adaptation (CLARA).
     Args: TODO
 
@@ -14,7 +14,7 @@ class SGD_CLARA(Optimizer):
     def __init__(self, params, lr=1e-3, c=0.2, d=None, adapt_lr=True, unit_step_direction=True):
         # Initialize optimizer first
         defaults = dict(lr=lr, c=c, d=d, adapt_lr=adapt_lr, unit_step_direction=unit_step_direction)  # partial init
-        super(SGD_CLARA, self).__init__(params, defaults)
+        super(SGD_Clara, self).__init__(params, defaults)
 
         # Now self.param_groups is available
         self.total_params = 0
@@ -38,7 +38,7 @@ class SGD_CLARA(Optimizer):
             group['d'] = d
 
     def __setstate__(self, state):
-        super(SGD_CLARA, self).__setstate__(state)
+        super(SGD_Clara, self).__setstate__(state)
 
     @torch.no_grad()
     def step(self, closure=None):

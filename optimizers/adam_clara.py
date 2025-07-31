@@ -2,7 +2,7 @@ import torch
 import math
 
 
-class Adam_CLARA(torch.optim.Optimizer):
+class Adam_Clara(torch.optim.Optimizer):
     r"""
     Implements Adam with CLARA.
 

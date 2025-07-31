@@ -44,28 +44,38 @@ def visualize_paths(num_steps=15):
     contours = ax.contour(X, Y, Z, levels=30, cmap='viridis', linewidths=0.8)
 
     # Plot paths for long path
-    ax.plot(ref_steps_long[:, 0], ref_steps_long[:, 1], 'o-', color='grey', label='Reference Path (2x)')
-    ax.plot(long_path[:, 0], long_path[:, 1], 'o-', color='blue', label='Longer Path')
+    ax.plot(ref_steps_long[:, 0], ref_steps_long[:, 1], 'o-', color='grey', label='Reference Path (2x)', markersize=4)
+    ax.plot([ref_steps_long[0, 0], ref_steps_long[-1, 0]],
+            [ref_steps_long[0, 1], ref_steps_long[-1, 1]],
+            color='black', linewidth=1, linestyle='--')
+
+    ax.plot(long_path[:, 0], long_path[:, 1], 'o-', color='blue', label='Longer Path', markersize=4)
+    ax.plot([long_path[0, 0], long_path[-1, 0]],
+            [long_path[0, 1], long_path[-1, 1]],
+            color='black', linewidth=1, )
 
     # Plot paths for short path
-    ax.plot(ref_steps_short[:, 0], ref_steps_short[:, 1], 'o-', color='grey', label='')
-    ax.plot(short_path[:, 0], short_path[:, 1], 'o-', color='red', label='Shorter Path')
+    ax.plot(ref_steps_short[:, 0], ref_steps_short[:, 1], 'o-', color='grey', label='', markersize=4)
+    ax.plot([ref_steps_short[0, 0], ref_steps_short[-1, 0]],
+            [ref_steps_short[0, 1], ref_steps_short[-1, 1]],
+            color='black', linewidth=1, linestyle='--')
+
+    ax.plot(short_path[:, 0], short_path[:, 1], 'o-', color='red', label='Shorter Path', markersize=3)
+    ax.plot([short_path[0, 0], short_path[-1, 0]],
+            [short_path[0, 1], short_path[-1, 1]],
+            color='black', linewidth=1, )
 
     # Styling
-    # ax.set_title('CLARA: Path Length vs Learning Rate Adaptation', fontsize=14)
     ax.legend(loc='lower right', fontsize=10)
     ax.grid(True, linestyle='--', alpha=0.6)
     ax.set_xlim(-0.5, 2.6)
     ax.set_ylim(-0.5, 2.5)
 
     plt.tight_layout()
-    # Save the plot as a PNG with 300 dpi
     fig.savefig('../results/visualization_plot.png', dpi=300, format='png')
     plt.show()
 
 visualize_paths(num_steps=6)
-
-
 
 
 #-------------------------Notes-----------------------------------------------*\
