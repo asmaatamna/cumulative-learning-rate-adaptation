@@ -112,8 +112,6 @@ if __name__ == "__main__":
         print("--------------------------------")
 
         for seed in SEEDS:
-            # TODO: Add message displaying seed number
-
             # 📅 Build timestamped result directory name
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
             # run_folder = f"{timestamp}_{EPOCHS}_{seed}_{d:.0e}_DateTimeEpochSeedDamping"  # Use only in damping experiments
