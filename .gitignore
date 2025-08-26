@@ -1,10 +1,10 @@
 **.DS_Store
-/TM_Experiments/data
+/Experiments/data
 *.pyc
-TM_Experiments/output.log
-TM_Experiments/results/**
-TM_Experiments/results/benchmark_mnist.pkl
+Experiments/output.log
+Experiments/results/**
+Experiments/results/benchmark_mnist.pkl
 .vscode/settings.json
-/TM_Experiments/wandb
-/TM_Experiments/mocks
-/TM_Experiments/docs
+/Experiments/wandb
+/Experiments/mocks
+/Experiments/docs
