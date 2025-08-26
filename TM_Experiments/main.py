@@ -33,7 +33,6 @@ EXPERIMENT_NAME = "Experiment 11"  # Name of the experiment
 
 # 2. Dataset Parameters
 # ---------------------------------------------------------*/
-# DATASETS = ["breast_cancer", "iris", "wine", "digits", "mnist", "fmnist", "cifar10", "cifar100", "wikitext"]  # All datasets you prepared
 DATASETS = ["breast_cancer", "iris", "wine", "digits", "mnist", "fmnist", "cifar10", "cifar100"]
 
 SUBSET = 100            # Percentage of dataset to use (use full)
@@ -55,23 +54,21 @@ NUM_CLASSES_DICT = {
 
 # 3. Training Parameters
 # ---------------------------------------------------------*/
-EPOCHS = 100  # TODO: Per dataset
-SEEDS = [0, 1, 2, 3, 4]  # [42]
+EPOCHS = 100
+SEEDS = [0, 1, 2, 3, 4]
 
 # 4. Optimizers to Benchmark
-# OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam", "D-Adaptation"]  # TODO: Add lr scheduler
-OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "Adam_CLARA", "Adam_CLARA_us"]
-
+OPTIMIZERS = ["SGD_CLARA", "SGD_CLARA_us", "SGD", "Adam_CLARA", "Adam_CLARA_us", "Adam", "D-Adaptation"]
 
 # Set a default learning rate for all optimizers
 DEFAULT_LR = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
 
 # Set default damping values for CLARA algorithms (based on tuning done in a separate procedure)
-d = 1e-1
+d = 1e-3
 DAMPING = {
     optimizer: {
         dataset: {
-            str(lr): d  # TODO: Use tuned values
+            str(lr): d  # Different damping values can be used for different (dataset, lr0) combinations
             for lr in DEFAULT_LR
         }
         for dataset in DATASETS
@@ -106,8 +103,6 @@ def download_datasets(datasets, batch_size):
 
 
 if __name__ == "__main__":
-    # Damping parameter d in CLARA. TODO: Try values: 1e-5, 1e-4, 1e-3, 1e-2, 1e-1
-    
     if DOWNLOAD_DATASETS:
         download_datasets(DATASETS, batch_size=BATCH_SIZE)
 
@@ -121,8 +116,8 @@ if __name__ == "__main__":
 
             # 📅 Build timestamped result directory name
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-            run_folder = f"{timestamp}_{EPOCHS}_{seed}_{d:.0e}_DateTimeEpochSeedDamping"  # TODO: Use only in damping experiments
-            # run_folder = f"{timestamp}_{EPOCHS}_{seed}_DateTimeEpochSeed"
+            # run_folder = f"{timestamp}_{EPOCHS}_{seed}_{d:.0e}_DateTimeEpochSeedDamping"  # Use only in damping experiments
+            run_folder = f"{timestamp}_{EPOCHS}_{seed}_DateTimeEpochSeed"
             save_path_with_time = os.path.join(SAVE_DIR, run_folder)
 
             for dataset in DATASETS:
