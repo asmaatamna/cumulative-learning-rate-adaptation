@@ -50,7 +50,7 @@ pip install torch==2.3.0 torchvision==0.18.0 torchdata datasets pyarrow matplotl
 │   ├── utils/                                    # Utility functions
 │   ├── 3D_Plotting.ipynb                         # Notebook for 3D visualizations
 │   └── 3D_Plotting.ipynb                         # Notebook for animated 3D visualizations
-├── Readme.md                                     # Documentation for experiments
+└── Readme.md                                     # Documentation for experiments
 ```
 
 ---
